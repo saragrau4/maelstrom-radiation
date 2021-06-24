@@ -49,7 +49,7 @@ setuptools.setup(
     zip_safe=True,
     entry_points={
         "climetlab.datasets": [
-            "maelstrom-radiation-radiation = climetlab_maelstrom_radiation.radiation:Radiation",
+            "maelstrom-radiation-tf = climetlab_maelstrom_radiation.radiation_tf:radiation_tf",
             # "maelstrom-radiation-other-dataset = climetlab_maelstrom_radiation.other_dataset:OtherDatasetClass",
         ]
     },
