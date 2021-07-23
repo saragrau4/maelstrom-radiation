@@ -40,17 +40,17 @@ setuptools.setup(
     long_description_content_type="text/markdown",
     author="Matthew Chantry",
     author_email="matthew.chantry@ecmwf.int",
-    url="https://github.com/mchantry/maelstrom-radiation",
+    url="https://git.ecmwf.int/users/pamc/repos/climetlab-maelstrom-radiation",
     license="Apache License Version 2.0",
     packages=setuptools.find_packages(),
     include_package_data=True,
-    install_requires=["climetlab>=0.5.6"],
+    install_requires=["climetlab>=0.8.9", "tensorflow>=2.0.0"],
     extras_require=extras_require,
     zip_safe=True,
     entry_points={
         "climetlab.datasets": [
+            "maelstrom-radiation = climetlab_maelstrom_radiation.radiation:radiation",
             "maelstrom-radiation-tf = climetlab_maelstrom_radiation.radiation_tf:radiation_tf",
-            # "maelstrom-radiation-other-dataset = climetlab_maelstrom_radiation.other_dataset:OtherDatasetClass",
         ]
     },
     keywords="meteorology",

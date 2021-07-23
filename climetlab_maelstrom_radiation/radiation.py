@@ -1,0 +1,265 @@
+#!/usr/bin/env python3# (C) Copyright 2021 ECMWF.
+#
+# This software is licensed under the terms of the Apache Licence Version 2.0
+# which can be obtained at http://www.apache.org/licenses/LICENSE-2.0.
+# In applying this licence, ECMWF does not waive the privileges and immunities
+# granted to it by virtue of its status as an intergovernmental organisation
+# nor does it submit to any jurisdiction.
+#
+from __future__ import annotations
+
+import climetlab as cml
+import pandas as pd
+
+# from climetlab.normalize import normalize_args
+import xarray as xr
+from climetlab import Dataset
+from climetlab.normalize import DateListNormaliser
+
+__version__ = "0.1.0"
+
+URL = "https://storage.ecmwf.europeanweather.cloud"
+PATTERN = "{url}/MAELSTROM_AP3/rad4NN_{inout}_{date}00_{timestep}c{patch}.nc"
+
+timestep_subsets = {"tier-1": 0, "2020": list(range(0, 3501, 125))}
+date_subsets = {
+    "tier-1": "20200101",
+    "2020": [
+        i.strftime("%Y%m%d")
+        for i in pd.date_range(start="20200101", end="20210101", freq="30D")
+    ],
+}
+patch_subsets = {"tier-1": list(range(0, 16, 2)), "2020": list(range(16))}
+
+
+class radiation(Dataset):
+    name = "radiation"
+    home_page = "https://git.ecmwf.int/projects/MLFET/repos/maelstrom-radiation"
+    licence = "-"
+    documentation = (
+        "Minimal call:\n"
+        "cml.load_dataset('maelstrom-radiation') \n"
+        "Optional arguments:\n"
+        "Specify subset, subset = 'tier-1\n"
+        "Or specify date/timestep/patch\n"
+        "Valid values found in .valid_date etc\n"
+        "To add the heating rates use heating_rate = True\n"
+        "To gather inputs into blocks of similar shape, raw_inputs = False \n"
+        "To reduce to minimal output components, minimal_outputs = True \n"
+    )
+    citation = "-"
+    terms_of_use = (
+        "By downloading data from this dataset, you agree to the terms and conditions defined at "
+        "https://git.ecmwf.int/projects/MLFET/repos/maelstrom-radiation/LICENSE "
+        "If you do not agree with such terms, do not download the data. "
+    )
+
+    def __init__(
+        self,
+        date="20200101",
+        timestep=0,
+        subset=None,
+        raw_inputs=True,
+        minimal_outputs=False,
+        all_outputs=False,
+        patch=list(range(0, 16, 2)),
+        heating_rate=True,
+    ):
+
+        self.icol_keys = [
+            "q",
+            "o3_mmr",
+            "co2_vmr",
+            "n2o_vmr",
+            "ch4_vmr",
+            "o2_vmr",
+            "cfc11_vmr",
+            "cfc12_vmr",
+            "hcfc22_vmr",
+            "ccl4_vmr",
+            "cloud_fraction",
+            "aerosol_mmr",
+            "q_liquid",
+            "q_ice",
+            "re_liquid",
+            "re_ice",
+        ]
+        # NB these variables will be needed for SPARTACUS
+        # 'fractional_std','inv_cloud_effective_size'
+        self.ihl_keys = ["temperature_hl", "pressure_hl"]
+        self.iinter_keys = ["overlap_param"]
+        self.isca_keys = [
+            "skin_temperature",
+            "cos_solar_zenith_angle",
+            "sw_albedo",
+            "sw_albedo_direct",
+            "lw_emissivity",
+            "solar_irradiance",
+        ]
+        self.valid_subset = ["tier-1", "2020"]
+        self.valid_timestep = list(range(0, 3501, 125))
+        self.valid_patch = list(range(16))
+        self.valid_date = [
+            i.strftime("%Y%m%d")
+            for i in pd.date_range(start="20200101", end="20210101", freq="30D")
+        ] + ["20190131", "20190531", "20190829", "20191028"]
+
+        self.raw_inputs = raw_inputs
+        self.heating_rate = heating_rate
+        self.minimal_outputs = minimal_outputs
+        self.all_outputs = all_outputs
+        if self.minimal_outputs:
+            self.all_outputs = False
+
+        if subset is not None:
+            self.check_valid(self.valid_subset, subset)
+            print(f"Loading subset: {subset}")
+            date = date_subsets[subset]
+            timestep = timestep_subsets[subset]
+            patch = patch_subsets[subset]
+            print(f"Loading date: {date}, timestep: {timestep}, patch: {patch}")
+
+        if type(patch) == range:
+            patch = list(patch)
+        if type(timestep) == range:
+            timestep = list(timestep)
+        date = DateListNormaliser("%Y%m%d")(date)
+
+        # This bit will be replaced by a normaliser long term
+        self.check_valid(self.valid_patch, patch)
+        self.check_valid(self.valid_timestep, timestep)
+        self.check_valid(self.valid_date, date)
+
+        request = dict(
+            url=URL, timestep=timestep, patch=patch, inout=["inputs"], date=date
+        )
+        self.source_inputs = cml.load_source(
+            "url-pattern", PATTERN, request, merger=Merger()
+        )
+        request = dict(
+            url=URL, timestep=timestep, patch=patch, inout=["outputs"], date=date
+        )
+        self.source_outputs = cml.load_source(
+            "url-pattern", PATTERN, request, merger=Merger()
+        )
+        return
+
+    def check_valid(self, valid, inputs):
+        if type(inputs) == list:
+            for item in inputs:
+                assert item in valid, f"{item} not in {valid}"
+        else:
+            assert inputs in valid, f"{inputs} not in {valid}"
+        return
+
+    def get_heating_rate(self, dataset, wl):
+        flux = self.get_fluxes(dataset, wl)
+        hl_pressure = dataset["pressure_hl"]
+        netflux = flux[..., 0] - flux[..., 1]
+        flux_diff = netflux[..., 1:] - netflux[..., :-1]
+        net_press = hl_pressure[..., 1:] - hl_pressure[..., :-1]
+        result = -flux_diff / net_press
+        return result.rename({"half_level": "level"})
+
+    def get_fluxes(self, dataset, wl):
+        return self.merge_cols(dataset, [f"flux_dn_{wl}", f"flux_up_{wl}"])
+
+    def merge_scalars(self, ds, keys, label=""):
+        tmp = []
+        for k in keys:
+            if len(ds[k].shape) == 1:
+                tmp.append(ds[k].expand_dims(label + "variable", axis=-1))
+            else:
+                rename_dic = {ds[k].dims[-1]: label + "variable"}
+                tmp.append(ds[k].rename(rename_dic))
+        return xr.concat(tmp, label + "variable", data_vars="all")
+
+    def merge_cols(self, ds, keys, label=""):
+        tmp = []
+        for k in keys:
+            if k == "aerosol_mmr":
+                order = ("column", "level", "aerosol_type")
+                tmp.append(
+                    ds[k].transpose(*order).rename({"aerosol_type": label + "variable"})
+                )
+            else:
+                tmp.append(ds[k].expand_dims(label + "variable", axis=-1))
+        return xr.concat(tmp, label + "variable", data_vars="all")
+
+    def get_minimal_outputs(self, ds):
+        assert self.heating_rate, "Minimal outputs require heating rate"
+        flux = self.get_fluxes(ds, "sw")
+        flux = xr.concat(
+            [flux[..., :1, 1], flux[..., -1:, 0], flux[..., -1:, -1]], dim="half_level"
+        )
+        flux = flux.rename({"half_level": "boundaries"})
+        ds["fluxes_sw"] = flux
+        flux = self.get_fluxes(ds, "lw")
+        flux = xr.concat(
+            [flux[..., :1, 1], flux[..., -1:, 0], flux[..., -1:, -1]], dim="half_level"
+        )
+        flux = flux.rename({"half_level": "boundaries"})
+        ds["fluxes_lw"] = flux
+        return ds
+
+    def to_xarray(self):
+        self.source = self.source_inputs
+        ds_inputs = super().to_xarray()
+        if not self.raw_inputs:
+            ds_inputs = self.proc_input_arrays(ds_inputs)
+        self.source = self.source_outputs
+        ds_outputs = super().to_xarray()
+        if self.heating_rate:
+            ds_outputs["hr_sw"] = self.get_heating_rate(ds_outputs, "sw")
+            ds_outputs["hr_lw"] = self.get_heating_rate(ds_outputs, "lw")
+        if not self.all_outputs:
+            output_list = ["flux_dn_sw", "flux_up_sw", "flux_dn_lw", "flux_up_lw"]
+            if self.minimal_outputs:
+                output_list = ["fluxes_sw", "fluxes_lw"]
+                ds_outputs = self.get_minimal_outputs(ds_outputs)
+            if self.heating_rate:
+                output_list += ["hr_sw", "hr_lw"]
+            ds_outputs = ds_outputs[output_list]
+
+        return xr.merge([ds_inputs, ds_outputs])
+
+    def proc_input_arrays(self, inputs_ds):
+        sca_inputs = self.merge_scalars(inputs_ds, self.isca_keys, label="sca_")
+        col_inputs = self.merge_cols(inputs_ds, self.icol_keys, label="col_")
+        hl_inputs = self.merge_cols(inputs_ds, self.ihl_keys, label="hl_")
+        inter_inputs = self.merge_cols(inputs_ds, self.iinter_keys, label="inter_")
+        hl_pressure = self.merge_cols(inputs_ds, ["pressure_hl"], label="p_")
+        return {
+            "sca_inputs": sca_inputs,
+            "col_inputs": col_inputs,
+            "hl_inputs": hl_inputs,
+            "pressure_hl": hl_pressure,
+            "inter_inputs": inter_inputs,
+        }
+
+
+class Merger:
+    def __init__(self, engine="netcdf4", concat_dim="column", options=None):
+        self.engine = engine
+        self.concat_dim = concat_dim
+        self.options = options if options is not None else {}
+
+    def to_xarray(self, paths, **kwargs):
+        return xr.open_mfdataset(
+            paths,
+            engine=self.engine,
+            concat_dim=self.concat_dim,
+            combine="nested",
+            coords="minimal",
+            data_vars="minimal",
+            preprocess=broadcast_irradiance,
+            compat="override",
+            parallel=True,
+            **self.options,
+        )
+
+
+def broadcast_irradiance(ds):
+    if "solar_irradiance" in ds:
+        ds["solar_irradiance"] = xr.broadcast(ds["solar_irradiance"], ds["lat"])[0]
+    return ds
