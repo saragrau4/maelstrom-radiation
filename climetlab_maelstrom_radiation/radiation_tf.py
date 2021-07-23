@@ -35,9 +35,22 @@ features_size = {
     "hr_lw": [137, 1],
 }
 
-timestep_subset = {"tier-1": 0, "2020": list(range(0, 3501, 125))}
-filenum_subset = {"tier-1": 0, "2020": list(range(52))}
-
+timestep_subset = {
+    "tier-1": 0,
+    "2020": list(range(0, 3501, 125)),
+    "2019013100": 2019013100,
+    "2019053100": 2019053100,
+    "2019082900": 2019082900,
+    "2019102800": 2019102800,
+}
+filenum_subset = {
+    "tier-1": 0,
+    "2020": list(range(52)),
+    "2019013100": list(range(116)),
+    "2019053100": list(range(116)),
+    "2019082900": list(range(116)),
+    "2019102800": list(range(116)),
+}
 _num_norm = 0
 
 feature_description = {}

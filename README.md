@@ -1,37 +1,39 @@
 ## maelstrom-radiation
 
-A dataset plugin for climetlab for the dataset maelstrom-radiation/radiation.
-
-
-Features
---------
-
-In this README is a description of how to get the maelstrom-radiation.
+A dataset plugin for climetlab for the dataset maelstrom-radiation.
 
 ## Datasets description
 
-There are two datasets: 
+This data is for learning the
+emulation of the ECMWF radiation scheme, TripleClouds, found in the ecRad package 
+(https://github.com/ecmwf/ecrad). Building an accurate emulator of radiative heating
+could accelerate weather and climate models partially by enabling the use of GPU
+hardware within our models.
 
-### 1 : `radiation`
+There are two datasets, allowing different views on the same data:
+
+### 1 : `maelstom-radiation`
+Supports the `to_xarray` method and allows users to explore the data with all structure kept intact.
+
+### 2 : `maelstrom-radiation-tf`
+Loads the same data but from a shuffled and repacked into the TFRecord format. This dataset supports 
+`to_tfdataset` which uses Tensorflow's dataset object.
 
 
-### 2
-TODO
+## Using climetlab to access the data 
 
-
-## Using climetlab to access the data (supports grib, netcdf and zarr)
-
-See the demo notebooks here (https://github.com/ecmwf-lab/climetlab_maelstrom_radiation/notebooks
-
-https://github.com/ecmwf-lab/climetlab_maelstrom_radiation/notebooks/demo_radiation.ipynb
-[nbviewer] (https://nbviewer.jupyter.org/github/climetlab_maelstrom_radiation/blob/main/notebooks/demo_radiation.ipynb) 
-[colab] (https://colab.research.google.com/github/climetlab_maelstrom_radiation/blob/main/notebooks/demo_radiation.ipynb) 
+Both datasets and downloaded and explained in the demo notebook here
+https://git.ecmwf.int/projects/MLFET/repos/maelstrom-radiation/browse/notebooks/demo_radiation.ipynb
 
 The climetlab python package allows easy access to the data with a few lines of code such as:
 ```
 
 !pip install climetlab climetlab_maelstrom_radiation
 import climetlab as cml
-ds = cml.load_dataset(""maelstrom-radiation-radiation", date='20201231',)
-ds.to_xarray()
+cml_ds = cml.load_dataset("maelstrom-radiation", subset="tier-1")
+ds = cml_ds.to_xarray()
+
+!or for the TFdataset version
+cml_ds = cml.load_dataset("maelstrom-radiation-tf", subset="tier-1")
+ds = cml_ds.to_tfdataset(batch_size=256)
 ```
