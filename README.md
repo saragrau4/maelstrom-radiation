@@ -1,6 +1,7 @@
 ## maelstrom-radiation
 
-A dataset plugin for climetlab for the dataset maelstrom-radiation.
+A dataset plugin for climetlab (https://climetlab.readthedocs.io/en/latest/)
+ for the dataset maelstrom-radiation.
 
 ## Datasets description
 
