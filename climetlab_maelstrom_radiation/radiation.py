@@ -108,6 +108,7 @@ class radiation(Dataset):
         self.heating_rate = heating_rate
         self.minimal_outputs = minimal_outputs
         self.all_outputs = all_outputs
+        self.g_cp = 9.80665 / 1004
         if self.minimal_outputs:
             self.all_outputs = False
 
@@ -158,7 +159,9 @@ class radiation(Dataset):
         netflux = flux[..., 0] - flux[..., 1]
         flux_diff = netflux[..., 1:] - netflux[..., :-1]
         net_press = hl_pressure[..., 1:] - hl_pressure[..., :-1]
-        result = -flux_diff / net_press
+        result = -self.g_cp * flux_diff / net_press
+        result.attrs["long_name"] = f"{wl} heating rate"
+        result.attrs["units"] = "K s-1"
         return result.rename({"half_level": "level"})
 
     def get_fluxes(self, dataset, wl):

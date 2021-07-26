@@ -131,6 +131,7 @@ class radiation_tf(Dataset):
         self.source = cml.load_source(
             "url-pattern", PATTERN, request
         )  # , merger=Merger())
+        self.g_cp = tf.constant(9.80665 / 1004)
         if minimal_outputs:
             self.sparsefunc = self.sparsen_data
             self.sparse_outputs = Intersection(["sw", "lw"], self.output_fields)
@@ -179,7 +180,10 @@ class radiation_tf(Dataset):
         for k in self.input_fields:
             inputs[k] = example[k]
         for k in self.output_fields:
-            outputs[k] = example[k]
+            if k in ["hr_sw", "hr_lw"]:
+                outputs[k] = self.g_cp * example[k]
+            else:
+                outputs[k] = example[k]
         return self.sparsefunc(*self.normfunc(inputs, outputs))
 
     def to_tfdataset(self, batch_size=256, shuffle_size=2048 * 16, repeat=False):
