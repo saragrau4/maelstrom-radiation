@@ -61,7 +61,7 @@ for k in features_size:
 class radiation_tf(Dataset):
     name = "radiation_tf"
     home_page = "https://git.ecmwf.int/projects/MLFET/repos/maelstrom-radiation"
-    licence = "-"
+    licence = "CC BY 4.0, see https://apps.ecmwf.int/datasets/licences/general/ "
     documentation = (
         "Minimal call:\n"
         "cml.load_dataset('maelstrom-radiation-tf') \n"
@@ -77,7 +77,7 @@ class radiation_tf(Dataset):
     citation = "-"
     terms_of_use = (
         "By downloading data from this dataset, you agree to the terms and conditions defined at "
-        "https://git.ecmwf.int/projects/MLFET/repos/maelstrom-radiation/LICENSE "
+        "https://apps.ecmwf.int/datasets/licences/general/ "
         "If you do not agree with such terms, do not download the data. "
     )
 

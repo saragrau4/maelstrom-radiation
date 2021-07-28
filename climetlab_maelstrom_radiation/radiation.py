@@ -35,7 +35,7 @@ patch_subsets = {"tier-1": list(range(0, 16, 2)), "2020": list(range(16))}
 class radiation(Dataset):
     name = "radiation"
     home_page = "https://git.ecmwf.int/projects/MLFET/repos/maelstrom-radiation"
-    licence = "-"
+    licence = "CC BY 4.0, see https://apps.ecmwf.int/datasets/licences/general/ "
     documentation = (
         "Minimal call:\n"
         "cml.load_dataset('maelstrom-radiation') \n"
@@ -50,7 +50,7 @@ class radiation(Dataset):
     citation = "-"
     terms_of_use = (
         "By downloading data from this dataset, you agree to the terms and conditions defined at "
-        "https://git.ecmwf.int/projects/MLFET/repos/maelstrom-radiation/LICENSE "
+        "https://apps.ecmwf.int/datasets/licences/general/ "
         "If you do not agree with such terms, do not download the data. "
     )
 
