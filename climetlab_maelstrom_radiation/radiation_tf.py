@@ -18,10 +18,11 @@ from climetlab import Dataset
 AUTOTUNE = tf.data.experimental.AUTOTUNE
 __version__ = "0.1.0"
 
-URL = "https://storage.ecmwf.europeanweather.cloud"
+HEADURL = "https://storage.ecmwf.europeanweather.cloud"
+URL = f"{HEADURL}/MAELSTROM_AP3/TFR"
 
 NORM_PATTERN = "{url}/MAELSTROM_AP3/{input_fields}.nc"
-PATTERN = "{url}/MAELSTROM_AP3/TFR/TripCloud{timestep}.{filenum}.tfrecord"
+PATTERN = "{url}/TripCloud{timestep}.{filenum}.tfrecord"
 
 features_size = {
     "sca_inputs": [17],
@@ -96,6 +97,7 @@ class radiation_tf(Dataset):
         output_fields=["sw", "lw", "hr_sw", "hr_lw"],
         minimal_outputs=False,
         norm=None,
+        path=None,
     ):
         self.valid_subset = [
             "tier-1",
@@ -127,10 +129,20 @@ class radiation_tf(Dataset):
         self.check_valid(self.valid_filenum, filenum)
         self.input_fields = input_fields
         self.output_fields = output_fields
-        request = dict(timestep=self.timestep, url=URL, filenum=self.filenum)
-        self.source = cml.load_source(
-            "url-pattern", PATTERN, request
-        )  # , merger=Merger())
+
+        if path is None:
+            request = dict(timestep=self.timestep, url=URL, filenum=self.filenum)
+            self.source = cml.load_source(
+                "url-pattern", PATTERN, request
+            )  # , merger=Merger())
+        else:
+            if path[-1] == "/":
+                path = path[:-1]
+            request = dict(timestep=self.timestep, url=path, filenum=self.filenum)
+            self.source = cml.load_source(
+                "file-pattern", PATTERN, request
+            )  # , merger=Merger())
+
         self.g_cp = tf.constant(9.80665 / 1004)
         if minimal_outputs:
             self.sparsefunc = self.sparsen_data
@@ -186,10 +198,13 @@ class radiation_tf(Dataset):
                 outputs[k] = example[k]
         return self.sparsefunc(*self.normfunc(inputs, outputs))
 
-    def to_tfdataset(self, batch_size=256, shuffle_size=2048 * 16, repeat=False):
+    def to_tfdataset(
+        self, batch_size=256, shuffle=True, shuffle_size=2048 * 16, repeat=False
+    ):
         ds = self.source.to_tfdataset(num_parallel_reads=AUTOTUNE)
 
-        ds = ds.shuffle(shuffle_size)
+        if shuffle:
+            ds = ds.shuffle(shuffle_size)
         # Prepare batches
         ds = ds.batch(batch_size)
 
@@ -206,7 +221,7 @@ class radiation_tf(Dataset):
         input_stds = {}
         if dataset is None:
             print("Loading normalisation arrays")
-            request = dict(url=URL, input_fields=self.input_fields)
+            request = dict(url=HEADURL, input_fields=self.input_fields)
             tmp_source = self.source
             self.source = cml.load_source(
                 "url-pattern", NORM_PATTERN, request, merger=NormMerger()
