@@ -95,7 +95,8 @@ class radiation_tf(Dataset):
             "pressure_hl",
         ],
         output_fields=["sw", "lw", "hr_sw", "hr_lw"],
-        minimal_outputs=False,
+        minimal_outputs = False,
+        topnetflux = False,
         norm=None,
         path=None,
     ):
@@ -129,7 +130,7 @@ class radiation_tf(Dataset):
         self.check_valid(self.valid_filenum, filenum)
         self.input_fields = input_fields
         self.output_fields = output_fields
-
+        self.topnetflux = topnetflux
         if path is None:
             request = dict(timestep=self.timestep, url=URL, filenum=self.filenum)
             self.source = cml.load_source(
@@ -145,7 +146,10 @@ class radiation_tf(Dataset):
 
         self.g_cp = tf.constant(9.80665 / 1004)
         if minimal_outputs:
-            self.sparsefunc = self.sparsen_data
+            if self.topnetflux:
+                self.sparsefunc = self.sparsen_topnet
+            else:
+                self.sparsefunc = self.sparsen_data
             self.sparse_outputs = Intersection(["sw", "lw"], self.output_fields)
         else:
             self.sparsefunc = self.emptyfunction
@@ -178,6 +182,14 @@ class radiation_tf(Dataset):
         for k in self.sparse_outputs:
             outputs[k] = tf.stack(
                 [outputs[k][..., 0, 1], outputs[k][..., -1, 0], outputs[k][..., -1, 1]],
+                axis=-1,
+            )
+        return inputs, outputs
+
+    def sparsen_topnet(self, inputs, outputs):
+        for k in self.sparse_outputs:
+            outputs[k] = tf.stack(
+                [outputs[k][..., 0, 0] - outputs[k][..., 0, 1], outputs[k][..., -1, 0], outputs[k][..., -1, 1]],
                 axis=-1,
             )
         return inputs, outputs
