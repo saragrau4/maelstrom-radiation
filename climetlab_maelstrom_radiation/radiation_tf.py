@@ -1,4 +1,5 @@
-#!/usr/bin/env python3# (C) Copyright 2021 ECMWF.
+#!/usr/bin/env python3 
+# (C) Copyright 2021 ECMWF.
 #
 # This software is licensed under the terms of the Apache Licence Version 2.0
 # which can be obtained at http://www.apache.org/licenses/LICENSE-2.0.
@@ -97,6 +98,7 @@ class radiation_tf(Dataset):
         output_fields=["sw", "lw", "hr_sw", "hr_lw"],
         minimal_outputs = False,
         topnetflux = False,
+        netflux = False,
         norm=None,
         path=None,
     ):
@@ -130,6 +132,7 @@ class radiation_tf(Dataset):
         self.check_valid(self.valid_filenum, filenum)
         self.input_fields = input_fields
         self.output_fields = output_fields
+        self.netflux = netflux
         self.topnetflux = topnetflux
         if path is None:
             request = dict(timestep=self.timestep, url=URL, filenum=self.filenum)
@@ -145,14 +148,19 @@ class radiation_tf(Dataset):
             )  # , merger=Merger())
 
         self.g_cp = tf.constant(9.80665 / 1004)
+        assert not (minimal_outputs and self.netflux), "Minimal outputs not consistent with netflux"
         if minimal_outputs:
             if self.topnetflux:
                 self.sparsefunc = self.sparsen_topnet
             else:
                 self.sparsefunc = self.sparsen_data
             self.sparse_outputs = Intersection(["sw", "lw"], self.output_fields)
+        elif self.netflux:
+            self.sparse_outputs = Intersection(["sw", "lw"], self.output_fields)            
+            self.sparsefunc = self.netflux_data
         else:
             self.sparsefunc = self.emptyfunction
+
         if norm is None or (norm is False):
             self.normfunc = self.emptyfunction
         else:
@@ -184,6 +192,11 @@ class radiation_tf(Dataset):
                 [outputs[k][..., 0, 1], outputs[k][..., -1, 0], outputs[k][..., -1, 1]],
                 axis=-1,
             )
+        return inputs, outputs
+
+    def netflux_data(self, inputs, outputs):
+        for k in self.sparse_outputs:
+            outputs[k] = outputs[k][...,0] - outputs[k][...,1]
         return inputs, outputs
 
     def sparsen_topnet(self, inputs, outputs):
