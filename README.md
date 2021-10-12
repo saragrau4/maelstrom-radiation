@@ -6,7 +6,7 @@ A dataset plugin for climetlab (https://climetlab.readthedocs.io/en/latest/)
 ## Datasets description
 
 This data is for learning the
-emulation of the ECMWF radiation scheme, TripleClouds, found in the ecRad package 
+emulation of the ECMWF radiation scheme, using the McICA solver, found in the ecRad package 
 (https://github.com/ecmwf/ecrad). Building an accurate emulator of radiative heating
 could accelerate weather and climate models partially by enabling the use of GPU
 hardware within our models.
