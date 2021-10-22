@@ -17,13 +17,11 @@ import xarray as xr
 from climetlab import Dataset
 
 AUTOTUNE = tf.data.experimental.AUTOTUNE
-__version__ = "0.1.0"
+__version__ = "0.3.0"
 
-HEADURL = "https://storage.ecmwf.europeanweather.cloud"
-URL = f"{HEADURL}/MAELSTROM_AP3/TFR"
+HEADURL = "https://storage.ecmwf.europeanweather.cloud/MAELSTROM_AP3"
 
-NORM_PATTERN = "{url}/MAELSTROM_AP3/{input_fields}.nc"
-PATTERN = "{url}/TripCloud{timestep}.{filenum}.tfrecord"
+NORM_PATTERN = "{url}/{input_fields}.nc"
 
 features_size = {
     "sca_inputs": [17],
@@ -85,6 +83,7 @@ class radiation_tf(Dataset):
 
     def __init__(
         self,
+        dataset='mcica',
         subset=None,
         timestep=0,
         filenum=[0],
@@ -101,6 +100,7 @@ class radiation_tf(Dataset):
         netflux = False,
         norm=None,
         path=None,
+        nonormsolar=False,
     ):
         self.valid_subset = [
             "tier-1",
@@ -130,22 +130,27 @@ class radiation_tf(Dataset):
         ):
             self.valid_filenum = list(range(116))
         self.check_valid(self.valid_filenum, filenum)
+
+        self.dataset = dataset.lower()
+        self.dataset_setup()
+
         self.input_fields = input_fields
         self.output_fields = output_fields
         self.netflux = netflux
         self.topnetflux = topnetflux
+        self.nonormsolar = nonormsolar
         if path is None:
-            request = dict(timestep=self.timestep, url=URL, filenum=self.filenum)
+            request = dict(timestep=self.timestep, url=self.URL, filenum=self.filenum)
             self.source = cml.load_source(
-                "url-pattern", PATTERN, request
-            )  # , merger=Merger())
+                "url-pattern", self.PATTERN, request
+            )
         else:
             if path[-1] == "/":
                 path = path[:-1]
             request = dict(timestep=self.timestep, url=path, filenum=self.filenum)
             self.source = cml.load_source(
-                "file-pattern", PATTERN, request
-            )  # , merger=Merger())
+                "file-pattern", self.PATTERN, request
+            )
 
         self.g_cp = tf.constant(9.80665 / 1004)
         assert not (minimal_outputs and self.netflux), "Minimal outputs not consistent with netflux"
@@ -166,6 +171,22 @@ class radiation_tf(Dataset):
         else:
             self.input_means, self.input_stds = self.load_norms()
             self.normfunc = self.normalise
+
+
+    def dataset_setup(self):
+        global HEADURL
+        urls = {"mcica" : f"{HEADURL}/TFR",
+                "tripleclouds" : f"{HEADURL}/records",
+                "3dcorrect" : f"{HEADURL}/records"}
+        patterns = {"mcica" : "{url}/TripCloud{timestep}.{filenum}.tfrecord",
+                    "tripleclouds" : "{url}/triplecloud{timestep}.{filenum}.tfrecord",
+                    "3dcorrect" : "{url}/3dcorrection{timestep}.{filenum}.tfrecord"}
+        assert self.dataset in urls.keys(), f"Dataset not in {urls.keys()}"
+
+        self.URL = urls[self.dataset]
+        self.PATTERN = patterns[self.dataset]
+        return
+
 
     def check_valid(self, valid, inputs):
         if type(inputs) == list:
@@ -217,11 +238,25 @@ class radiation_tf(Dataset):
         for k in self.input_fields:
             inputs[k] = example[k]
         for k in self.output_fields:
+            outputs[k] = example[k]
+        return self.sparsefunc(*self.normfunc(inputs, outputs))
+
+    def _parse_batch_mcica(self, record_batch):
+        # Create a description of the features
+        global feature_description
+        # Parse the input `tf.Example` proto using the dictionary above
+        example = tf.io.parse_example(record_batch, feature_description)
+        inputs = {}
+        outputs = {}
+        for k in self.input_fields:
+            inputs[k] = example[k]
+        for k in self.output_fields:
             if k in ["hr_sw", "hr_lw"]:
                 outputs[k] = self.g_cp * example[k]
             else:
                 outputs[k] = example[k]
         return self.sparsefunc(*self.normfunc(inputs, outputs))
+
 
     def to_tfdataset(
         self, batch_size=256, shuffle=True, shuffle_size=2048 * 16, repeat=False
@@ -234,7 +269,11 @@ class radiation_tf(Dataset):
         ds = ds.batch(batch_size)
 
         # Parse a batch into a dataset
-        ds = ds.map(lambda x: self._parse_batch(x))
+        if self.dataset == 'mcica':
+            # Hack correcting the scaling of heating rates in mcica data
+            ds = ds.map(lambda x: self._parse_batch_mcica(x))
+        else:
+            ds = ds.map(lambda x: self._parse_batch(x))
 
         if repeat:
             ds = ds.repeat()
@@ -242,11 +281,13 @@ class radiation_tf(Dataset):
         return ds.prefetch(buffer_size=AUTOTUNE)
 
     def load_norms(self, dataset=None):
+        global HEADURL, NORM_PATTERN
         input_means = {}
         input_stds = {}
         if dataset is None:
             print("Loading normalisation arrays")
             request = dict(url=HEADURL, input_fields=self.input_fields)
+            print(request)
             tmp_source = self.source
             self.source = cml.load_source(
                 "url-pattern", NORM_PATTERN, request, merger=NormMerger()
@@ -256,8 +297,14 @@ class radiation_tf(Dataset):
 
         for k in self.input_fields:
             array = dataset[f"{k}_mean"].values
+            if self.nonormsolar and k == 'sca_inputs':
+                array[1] = 0.0
+                array[-1] = 0.0
             input_means[k] = tf.constant(array, shape=(1,) + array.shape)
             array = dataset[f"{k}_std"].values
+            if self.nonormsolar and k == 'sca_inputs':
+                array[1] = 1.0
+                array[-1] = 1.0
             input_stds[k] = tf.constant(array, shape=(1,) + array.shape)
         return input_means, input_stds
 

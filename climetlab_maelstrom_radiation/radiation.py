@@ -16,10 +16,10 @@ import xarray as xr
 from climetlab import Dataset
 from climetlab.normalize import DateListNormaliser
 
-__version__ = "0.1.0"
+__version__ = "0.3.0"
 
 URL = "https://storage.ecmwf.europeanweather.cloud"
-PATTERN = "{url}/MAELSTROM_AP3/rad4NN_{inout}_{date}00_{timestep}c{patch}.nc"
+PATTERN = "{url}/MAELSTROM_AP3/{inout}_{date}00_{timestep}c{patch}.nc"
 
 timestep_subsets = {"tier-1": 0, "2020": list(range(0, 3501, 125))}
 date_subsets = {
@@ -56,6 +56,7 @@ class radiation(Dataset):
 
     def __init__(
         self,
+        dataset='mcica',
         date="20200101",
         timestep=0,
         subset=None,
@@ -103,7 +104,15 @@ class radiation(Dataset):
             i.strftime("%Y%m%d")
             for i in pd.date_range(start="20200101", end="20210101", freq="30D")
         ] + ["20190131", "20190531", "20190829", "20191028"]
-
+        
+        self.dataset_tags = {'mcica': 'rad4NN_outputs',
+                             '3dcorrection': '3dcorrection_outputs',
+                             # 'tripleclouds' : 'triplecloud_outputs',
+                             # 'spartacus' : 'spartacus_outputs',
+                         }
+        self.dataset = dataset.lower()
+        assert self.dataset in self.dataset_tags.keys(), f"{self.dataset} not valid dataset, use {self.dataset_tags.keys()}"
+        
         self.raw_inputs = raw_inputs
         self.heating_rate = heating_rate
         self.minimal_outputs = minimal_outputs
@@ -132,13 +141,15 @@ class radiation(Dataset):
         self.check_valid(self.valid_date, date)
 
         request = dict(
-            url=URL, timestep=timestep, patch=patch, inout=["inputs"], date=date
+            url=URL, timestep=timestep, patch=patch, inout=["rad4NN_inputs"], date=date
         )
         self.source_inputs = cml.load_source(
             "url-pattern", PATTERN, request, merger=Merger()
         )
         request = dict(
-            url=URL, timestep=timestep, patch=patch, inout=["outputs"], date=date
+            url=URL, timestep=timestep, patch=patch, 
+            inout=[self.dataset_tags[self.dataset]], 
+            date=date,
         )
         self.source_outputs = cml.load_source(
             "url-pattern", PATTERN, request, merger=Merger()
@@ -239,7 +250,7 @@ class radiation(Dataset):
             "pressure_hl": hl_pressure,
             "inter_inputs": inter_inputs,
         }
-
+        
 
 class Merger:
     def __init__(self, engine="netcdf4", concat_dim="column", options=None):
