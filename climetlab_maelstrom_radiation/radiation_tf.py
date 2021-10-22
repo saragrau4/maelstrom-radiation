@@ -287,7 +287,6 @@ class radiation_tf(Dataset):
         if dataset is None:
             print("Loading normalisation arrays")
             request = dict(url=HEADURL, input_fields=self.input_fields)
-            print(request)
             tmp_source = self.source
             self.source = cml.load_source(
                 "url-pattern", NORM_PATTERN, request, merger=NormMerger()
