@@ -44,7 +44,7 @@ setuptools.setup(
     license="Apache License Version 2.0",
     packages=setuptools.find_packages(),
     include_package_data=True,
-    install_requires=["climetlab>=0.8.9", "tensorflow>=2.0.0"],
+    install_requires=["climetlab>=0.9.1", "tensorflow>=2.0.0"],
     extras_require=extras_require,
     zip_safe=True,
     entry_points={

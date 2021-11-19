@@ -14,7 +14,7 @@ import pandas as pd
 # from climetlab.normalize import normalize_args
 import xarray as xr
 from climetlab import Dataset
-from climetlab.normalize import DateListNormaliser
+from climetlab.decorators import normalize
 
 __version__ = "0.3.0"
 
@@ -30,6 +30,14 @@ date_subsets = {
     ],
 }
 patch_subsets = {"tier-1": list(range(0, 16, 2)), "2020": list(range(16))}
+
+valid_subset = ["tier-1", "2020"]
+valid_timestep = list(range(0, 3501, 125))
+valid_patch = list(range(16))
+valid_date = [
+    i.strftime("%Y%m%d")
+    for i in pd.date_range(start="20200101", end="20210101", freq="30D")
+] + ["20190131", "20190531", "20190829", "20191028"]
 
 
 class radiation(Dataset):
@@ -54,9 +62,14 @@ class radiation(Dataset):
         "If you do not agree with such terms, do not download the data. "
     )
 
+    @normalize("dataset", ["mcica", "tripleclouds", "3dcorrection"], multiple=False)
+    @normalize("date", valid_date, multiple=True, type="date_list")
+    @normalize("subset", valid_subset, multiple=False)
+    @normalize("patch", valid_patch, multiple=True)
+    @normalize("timestep", valid_timestep, multiple=True)
     def __init__(
         self,
-        dataset='mcica',
+        dataset="mcica",
         date="20200101",
         timestep=0,
         subset=None,
@@ -97,22 +110,14 @@ class radiation(Dataset):
             "lw_emissivity",
             "solar_irradiance",
         ]
-        self.valid_subset = ["tier-1", "2020"]
-        self.valid_timestep = list(range(0, 3501, 125))
-        self.valid_patch = list(range(16))
-        self.valid_date = [
-            i.strftime("%Y%m%d")
-            for i in pd.date_range(start="20200101", end="20210101", freq="30D")
-        ] + ["20190131", "20190531", "20190829", "20191028"]
-        
-        self.dataset_tags = {'mcica': 'rad4NN_outputs',
-                             '3dcorrection': '3dcorrection_outputs',
-                             # 'tripleclouds' : 'triplecloud_outputs',
-                             # 'spartacus' : 'spartacus_outputs',
-                         }
-        self.dataset = dataset.lower()
-        assert self.dataset in self.dataset_tags.keys(), f"{self.dataset} not valid dataset, use {self.dataset_tags.keys()}"
-        
+
+        self.dataset_tags = {
+            "mcica": "rad4NN_outputs",
+            "3dcorrection": "3dcorrection_outputs",
+            "tripleclouds": "triplecloud_outputs",
+            # 'spartacus' : 'spartacus_outputs',
+        }
+
         self.raw_inputs = raw_inputs
         self.heating_rate = heating_rate
         self.minimal_outputs = minimal_outputs
@@ -121,24 +126,17 @@ class radiation(Dataset):
         if self.minimal_outputs:
             self.all_outputs = False
 
+        self.valid_subset = valid_subset
+        self.valid_timestep = valid_timestep
+        self.valid_patch = valid_patch
+        self.valid_date = valid_date
+
         if subset is not None:
-            self.check_valid(self.valid_subset, subset)
             print(f"Loading subset: {subset}")
             date = date_subsets[subset]
             timestep = timestep_subsets[subset]
             patch = patch_subsets[subset]
             print(f"Loading date: {date}, timestep: {timestep}, patch: {patch}")
-
-        if type(patch) == range:
-            patch = list(patch)
-        if type(timestep) == range:
-            timestep = list(timestep)
-        date = DateListNormaliser("%Y%m%d")(date)
-
-        # This bit will be replaced by a normaliser long term
-        self.check_valid(self.valid_patch, patch)
-        self.check_valid(self.valid_timestep, timestep)
-        self.check_valid(self.valid_date, date)
 
         request = dict(
             url=URL, timestep=timestep, patch=patch, inout=["rad4NN_inputs"], date=date
@@ -147,21 +145,15 @@ class radiation(Dataset):
             "url-pattern", PATTERN, request, merger=Merger()
         )
         request = dict(
-            url=URL, timestep=timestep, patch=patch, 
-            inout=[self.dataset_tags[self.dataset]], 
+            url=URL,
+            timestep=timestep,
+            patch=patch,
+            inout=[self.dataset_tags[self.dataset]],
             date=date,
         )
         self.source_outputs = cml.load_source(
             "url-pattern", PATTERN, request, merger=Merger()
         )
-        return
-
-    def check_valid(self, valid, inputs):
-        if type(inputs) == list:
-            for item in inputs:
-                assert item in valid, f"{item} not in {valid}"
-        else:
-            assert inputs in valid, f"{inputs} not in {valid}"
         return
 
     def get_heating_rate(self, dataset, wl):
@@ -250,7 +242,7 @@ class radiation(Dataset):
             "pressure_hl": hl_pressure,
             "inter_inputs": inter_inputs,
         }
-        
+
 
 class Merger:
     def __init__(self, engine="netcdf4", concat_dim="column", options=None):
