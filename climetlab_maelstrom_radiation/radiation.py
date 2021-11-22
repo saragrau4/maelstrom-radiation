@@ -63,7 +63,11 @@ class radiation(Dataset):
     )
 
     @normalize("dataset", ["mcica", "tripleclouds", "3dcorrection"], multiple=False)
-    @normalize("date", valid_date, multiple=True, type="date_list")
+    @normalize(
+        "date",
+        valid_date,
+        multiple=True,  # type="date-list"
+    )  # , aliases={"2020":date_subsets["2020"]})
     @normalize("subset", valid_subset, multiple=False)
     @normalize("patch", valid_patch, multiple=True)
     @normalize("timestep", valid_timestep, multiple=True)
@@ -137,6 +141,7 @@ class radiation(Dataset):
             timestep = timestep_subsets[subset]
             patch = patch_subsets[subset]
             print(f"Loading date: {date}, timestep: {timestep}, patch: {patch}")
+        self.dataset = dataset
 
         request = dict(
             url=URL, timestep=timestep, patch=patch, inout=["rad4NN_inputs"], date=date
