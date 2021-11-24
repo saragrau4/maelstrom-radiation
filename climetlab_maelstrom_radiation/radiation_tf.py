@@ -1,4 +1,4 @@
-#!/usr/bin/env python3 
+#!/usr/bin/env python3
 # (C) Copyright 2021 ECMWF.
 #
 # This software is licensed under the terms of the Apache Licence Version 2.0
@@ -15,9 +15,10 @@ import climetlab as cml
 import tensorflow as tf
 import xarray as xr
 from climetlab import Dataset
+from climetlab.decorators import normalize
 
 AUTOTUNE = tf.data.experimental.AUTOTUNE
-__version__ = "0.3.0"
+__version__ = "0.5.0"
 
 HEADURL = "https://storage.ecmwf.europeanweather.cloud/MAELSTROM_AP3"
 
@@ -81,9 +82,25 @@ class radiation_tf(Dataset):
         "If you do not agree with such terms, do not download the data. "
     )
 
+    # @normalize("filenum", valid_patch, multiple=True)
+    # @normalize("timestep", valid_timestep, multiple=True)
+    @normalize("dataset", ["mcica", "tripleclouds", "3dcorrection"], multiple=False)
+    @normalize("hr_units", ["K s-1", "K d-1"], multiple=False)
+    @normalize("output_fields", ["sw", "lw", "hr_sw", "hr_lw"], multiple=True)
+    @normalize(
+        "input_fields",
+        [
+            "sca_inputs",
+            "col_inputs",
+            "hl_inputs",
+            "inter_inputs",
+            "pressure_hl",
+        ],
+        multiple=True,
+    )
     def __init__(
         self,
-        dataset='mcica',
+        dataset="mcica",
         subset=None,
         timestep=0,
         filenum=[0],
@@ -95,12 +112,13 @@ class radiation_tf(Dataset):
             "pressure_hl",
         ],
         output_fields=["sw", "lw", "hr_sw", "hr_lw"],
-        minimal_outputs = False,
-        topnetflux = False,
-        netflux = False,
+        minimal_outputs=False,
+        topnetflux=False,
+        netflux=False,
         norm=None,
         path=None,
         nonormsolar=False,
+        hr_units="K s-1",
     ):
         self.valid_subset = [
             "tier-1",
@@ -141,19 +159,22 @@ class radiation_tf(Dataset):
         self.nonormsolar = nonormsolar
         if path is None:
             request = dict(timestep=self.timestep, url=self.URL, filenum=self.filenum)
-            self.source = cml.load_source(
-                "url-pattern", self.PATTERN, request
-            )
+            self.source = cml.load_source("url-pattern", self.PATTERN, request)
         else:
             if path[-1] == "/":
                 path = path[:-1]
             request = dict(timestep=self.timestep, url=path, filenum=self.filenum)
-            self.source = cml.load_source(
-                "file-pattern", self.PATTERN, request
-            )
+            self.source = cml.load_source("file-pattern", self.PATTERN, request)
 
-        self.g_cp = tf.constant(9.80665 / 1004)
-        assert not (minimal_outputs and self.netflux), "Minimal outputs not consistent with netflux"
+        self.hr_units = hr_units
+        self.hr_scale = {
+            "K s-1": tf.constant(1, dtype="float"),
+            "K d-1": tf.constant(24 * 3600, dtype="float"),
+        }[hr_units]
+        self.g_cp = tf.constant(9.80665 / 1004) * self.hr_scale
+        assert not (
+            minimal_outputs and self.netflux
+        ), "Minimal outputs not consistent with netflux"
         if minimal_outputs:
             if self.topnetflux:
                 self.sparsefunc = self.sparsen_topnet
@@ -161,7 +182,7 @@ class radiation_tf(Dataset):
                 self.sparsefunc = self.sparsen_data
             self.sparse_outputs = Intersection(["sw", "lw"], self.output_fields)
         elif self.netflux:
-            self.sparse_outputs = Intersection(["sw", "lw"], self.output_fields)            
+            self.sparse_outputs = Intersection(["sw", "lw"], self.output_fields)
             self.sparsefunc = self.netflux_data
         else:
             self.sparsefunc = self.emptyfunction
@@ -172,21 +193,23 @@ class radiation_tf(Dataset):
             self.input_means, self.input_stds = self.load_norms()
             self.normfunc = self.normalise
 
-
     def dataset_setup(self):
         global HEADURL
-        urls = {"mcica" : f"{HEADURL}/TFR",
-                "tripleclouds" : f"{HEADURL}/records",
-                "3dcorrect" : f"{HEADURL}/records"}
-        patterns = {"mcica" : "{url}/TripCloud{timestep}.{filenum}.tfrecord",
-                    "tripleclouds" : "{url}/triplecloud{timestep}.{filenum}.tfrecord",
-                    "3dcorrect" : "{url}/3dcorrection{timestep}.{filenum}.tfrecord"}
+        urls = {
+            "mcica": f"{HEADURL}/TFR",
+            "tripleclouds": f"{HEADURL}/records",
+            "3dcorrect": f"{HEADURL}/records",
+        }
+        patterns = {
+            "mcica": "{url}/TripCloud{timestep}.{filenum}.tfrecord",
+            "tripleclouds": "{url}/triplecloud{timestep}.{filenum}.tfrecord",
+            "3dcorrect": "{url}/3dcorrection{timestep}.{filenum}.tfrecord",
+        }
         assert self.dataset in urls.keys(), f"Dataset not in {urls.keys()}"
 
         self.URL = urls[self.dataset]
         self.PATTERN = patterns[self.dataset]
         return
-
 
     def check_valid(self, valid, inputs):
         if type(inputs) == list:
@@ -217,13 +240,17 @@ class radiation_tf(Dataset):
 
     def netflux_data(self, inputs, outputs):
         for k in self.sparse_outputs:
-            outputs[k] = outputs[k][...,0] - outputs[k][...,1]
+            outputs[k] = outputs[k][..., 0] - outputs[k][..., 1]
         return inputs, outputs
 
     def sparsen_topnet(self, inputs, outputs):
         for k in self.sparse_outputs:
             outputs[k] = tf.stack(
-                [outputs[k][..., 0, 0] - outputs[k][..., 0, 1], outputs[k][..., -1, 0], outputs[k][..., -1, 1]],
+                [
+                    outputs[k][..., 0, 0] - outputs[k][..., 0, 1],
+                    outputs[k][..., -1, 0],
+                    outputs[k][..., -1, 1],
+                ],
                 axis=-1,
             )
         return inputs, outputs
@@ -239,6 +266,22 @@ class radiation_tf(Dataset):
             inputs[k] = example[k]
         for k in self.output_fields:
             outputs[k] = example[k]
+        return self.sparsefunc(*self.normfunc(inputs, outputs))
+
+    def _parse_batch_rescale(self, record_batch):
+        # Create a description of the features
+        global feature_description
+        # Parse the input `tf.Example` proto using the dictionary above
+        example = tf.io.parse_example(record_batch, feature_description)
+        inputs = {}
+        outputs = {}
+        for k in self.input_fields:
+            inputs[k] = example[k]
+        for k in self.output_fields:
+            if k in ["hr_sw", "hr_lw"]:
+                outputs[k] = self.hr_scale * example[k]
+            else:
+                outputs[k] = example[k]
         return self.sparsefunc(*self.normfunc(inputs, outputs))
 
     def _parse_batch_mcica(self, record_batch):
@@ -257,7 +300,6 @@ class radiation_tf(Dataset):
                 outputs[k] = example[k]
         return self.sparsefunc(*self.normfunc(inputs, outputs))
 
-
     def to_tfdataset(
         self, batch_size=256, shuffle=True, shuffle_size=2048 * 16, repeat=False
     ):
@@ -269,9 +311,11 @@ class radiation_tf(Dataset):
         ds = ds.batch(batch_size)
 
         # Parse a batch into a dataset
-        if self.dataset == 'mcica':
+        if self.dataset == "mcica":
             # Hack correcting the scaling of heating rates in mcica data
             ds = ds.map(lambda x: self._parse_batch_mcica(x))
+        elif self.hr_units != "K s-1":
+            ds = ds.map(lambda x: self._parse_batch_rescale(x))
         else:
             ds = ds.map(lambda x: self._parse_batch(x))
 
@@ -296,12 +340,12 @@ class radiation_tf(Dataset):
 
         for k in self.input_fields:
             array = dataset[f"{k}_mean"].values
-            if self.nonormsolar and k == 'sca_inputs':
+            if self.nonormsolar and k == "sca_inputs":
                 array[1] = 0.0
                 array[-1] = 0.0
             input_means[k] = tf.constant(array, shape=(1,) + array.shape)
             array = dataset[f"{k}_std"].values
-            if self.nonormsolar and k == 'sca_inputs':
+            if self.nonormsolar and k == "sca_inputs":
                 array[1] = 1.0
                 array[-1] = 1.0
             input_stds[k] = tf.constant(array, shape=(1,) + array.shape)

@@ -16,7 +16,7 @@ import xarray as xr
 from climetlab import Dataset
 from climetlab.decorators import normalize
 
-__version__ = "0.3.0"
+__version__ = "0.5.0"
 
 URL = "https://storage.ecmwf.europeanweather.cloud"
 PATTERN = "{url}/MAELSTROM_AP3/{inout}_{date}00_{timestep}c{patch}.nc"
@@ -71,6 +71,7 @@ class radiation(Dataset):
     @normalize("subset", valid_subset, multiple=False)
     @normalize("patch", valid_patch, multiple=True)
     @normalize("timestep", valid_timestep, multiple=True)
+    @normalize("hr_units", ["K s-1", "K d-1"], multiple=False)
     def __init__(
         self,
         dataset="mcica",
@@ -82,6 +83,7 @@ class radiation(Dataset):
         all_outputs=False,
         patch=list(range(0, 16, 2)),
         heating_rate=True,
+        hr_units="K s-1",
     ):
 
         self.icol_keys = [
@@ -126,7 +128,9 @@ class radiation(Dataset):
         self.heating_rate = heating_rate
         self.minimal_outputs = minimal_outputs
         self.all_outputs = all_outputs
-        self.g_cp = 9.80665 / 1004
+        self.hr_units = hr_units
+        self.hr_scale = {"K s-1": 1, "K d-1": 24 * 3600}[hr_units]
+        self.g_cp = 9.80665 / 1004 * self.hr_scale
         if self.minimal_outputs:
             self.all_outputs = False
 
@@ -169,7 +173,7 @@ class radiation(Dataset):
         net_press = hl_pressure[..., 1:] - hl_pressure[..., :-1]
         result = -self.g_cp * flux_diff / net_press
         result.attrs["long_name"] = f"{wl} heating rate"
-        result.attrs["units"] = "K s-1"
+        result.attrs["units"] = self.hr_units
         return result.rename({"half_level": "level"})
 
     def get_fluxes(self, dataset, wl):
