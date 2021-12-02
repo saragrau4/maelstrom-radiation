@@ -10,15 +10,21 @@
 from __future__ import annotations
 
 import climetlab as cml
+from climetlab import Dataset
+from climetlab.decorators import normalize
+from climetlab.utils.patterns import Pattern
+from climetlab.sources.multi import MultiSource
+from climetlab.sources.file import File
 
+import random
 # from climetlab.normalize import normalize_args
 import tensorflow as tf
 import xarray as xr
-from climetlab import Dataset
-from climetlab.decorators import normalize
 
+
+tf.data.Options.deterministic = False
 AUTOTUNE = tf.data.experimental.AUTOTUNE
-__version__ = "0.5.0"
+__version__ = "0.5.1"
 
 HEADURL = "https://storage.ecmwf.europeanweather.cloud/MAELSTROM_AP3"
 
@@ -119,6 +125,7 @@ class radiation_tf(Dataset):
         path=None,
         nonormsolar=False,
         hr_units="K s-1",
+        shuffle_files=True,
     ):
         self.valid_subset = [
             "tier-1",
@@ -157,14 +164,26 @@ class radiation_tf(Dataset):
         self.netflux = netflux
         self.topnetflux = topnetflux
         self.nonormsolar = nonormsolar
+        self.shuffle_files = shuffle_files
+
         if path is None:
             request = dict(timestep=self.timestep, url=self.URL, filenum=self.filenum)
-            self.source = cml.load_source("url-pattern", self.PATTERN, request)
+            urls = Pattern(self.PATTERN).substitute(request)
+            if self.shuffle_files:
+                random.shuffle(urls)
+            sources = [cml.load_source("url", url,lazily=True) for url in urls]
+            self.source = MultiSource(sources)
         else:
             if path[-1] == "/":
                 path = path[:-1]
             request = dict(timestep=self.timestep, url=path, filenum=self.filenum)
-            self.source = cml.load_source("file-pattern", self.PATTERN, request)
+            urls = Pattern(self.PATTERN).substitute(request)
+            if self.shuffle_files:
+                random.shuffle(urls)
+            sources = [File(file) for file in urls]
+            self.source = MultiSource(
+                 sources
+            )
 
         self.hr_units = hr_units
         self.hr_scale = {
@@ -329,7 +348,7 @@ class radiation_tf(Dataset):
         input_means = {}
         input_stds = {}
         if dataset is None:
-            print("Loading normalisation arrays")
+            # print("Loading normalisation arrays")
             request = dict(url=HEADURL, input_fields=self.input_fields)
             tmp_source = self.source
             self.source = cml.load_source(
