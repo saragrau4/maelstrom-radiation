@@ -24,7 +24,7 @@ import xarray as xr
 
 tf.data.Options.deterministic = False
 AUTOTUNE = tf.data.experimental.AUTOTUNE
-__version__ = "0.5.1"
+__version__ = "0.5.2"
 
 HEADURL = "https://storage.ecmwf.europeanweather.cloud/MAELSTROM_AP3"
 
@@ -217,12 +217,12 @@ class radiation_tf(Dataset):
         urls = {
             "mcica": f"{HEADURL}/TFR",
             "tripleclouds": f"{HEADURL}/records",
-            "3dcorrect": f"{HEADURL}/records",
+            "3dcorrection": f"{HEADURL}/records",
         }
         patterns = {
             "mcica": "{url}/TripCloud{timestep}.{filenum}.tfrecord",
             "tripleclouds": "{url}/triplecloud{timestep}.{filenum}.tfrecord",
-            "3dcorrect": "{url}/3dcorrection{timestep}.{filenum}.tfrecord",
+            "3dcorrection": "{url}/3dcorrection{timestep}.{filenum}.tfrecord",
         }
         assert self.dataset in urls.keys(), f"Dataset not in {urls.keys()}"
 
