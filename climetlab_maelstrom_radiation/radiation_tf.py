@@ -24,7 +24,7 @@ import xarray as xr
 
 tf.data.Options.deterministic = False
 AUTOTUNE = tf.data.experimental.AUTOTUNE
-__version__ = "0.5.2"
+__version__ = "0.5.3"
 
 HEADURL = "https://storage.ecmwf.europeanweather.cloud/MAELSTROM_AP3"
 
@@ -169,6 +169,8 @@ class radiation_tf(Dataset):
         if path is None:
             request = dict(timestep=self.timestep, url=self.URL, filenum=self.filenum)
             urls = Pattern(self.PATTERN).substitute(request)
+            if type(urls) == str:
+                urls = [urls]
             if self.shuffle_files:
                 random.shuffle(urls)
             sources = [cml.load_source("url", url,lazily=True) for url in urls]
@@ -178,6 +180,8 @@ class radiation_tf(Dataset):
                 path = path[:-1]
             request = dict(timestep=self.timestep, url=path, filenum=self.filenum)
             urls = Pattern(self.PATTERN).substitute(request)
+            if type(urls) == str:
+                urls = [urls]
             if self.shuffle_files:
                 random.shuffle(urls)
             sources = [File(file) for file in urls]
@@ -320,14 +324,13 @@ class radiation_tf(Dataset):
         return self.sparsefunc(*self.normfunc(inputs, outputs))
 
     def to_tfdataset(
-        self, batch_size=256, shuffle=True, shuffle_size=2048 * 16, repeat=False
+        self, batch_size=256, shuffle=True, shuffle_size=2048 * 16, repeat=False,
+            equal_csza = False, dark_side = True,
     ):
         ds = self.source.to_tfdataset(num_parallel_reads=AUTOTUNE)
 
         if shuffle:
             ds = ds.shuffle(shuffle_size)
-        # Prepare batches
-        ds = ds.batch(batch_size)
 
         # Parse a batch into a dataset
         if self.dataset == "mcica":
@@ -337,6 +340,22 @@ class radiation_tf(Dataset):
             ds = ds.map(lambda x: self._parse_batch_rescale(x))
         else:
             ds = ds.map(lambda x: self._parse_batch(x))
+
+
+        if equal_csza:
+            def get_csz_class(x,y,num_classes = 10):
+                return tf.cast(tf.floor(x['sca_inputs'][...,1] * tf.constant(num_classes,dtype='float')),tf.int32)
+
+            csza_sampler = tf.data.experimental.rejection_resample(get_csz_class, 10*[0.1])
+            ds = ds.apply(csza_sampler)
+            ds = ds.map(lambda x,y: (y[0],y[1]))
+        elif ( not dark_side ):
+            def not_dark(x,y):
+                return x['sca_inputs'][...,1] > tf.constant(0.0252605)
+            ds = ds.filter(lambda x,y: not_dark(x,y))
+
+        # Prepare batches
+        ds = ds.batch(batch_size)
 
         if repeat:
             ds = ds.repeat()

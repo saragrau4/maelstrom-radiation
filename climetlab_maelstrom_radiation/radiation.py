@@ -16,7 +16,7 @@ import xarray as xr
 from climetlab import Dataset
 from climetlab.decorators import normalize
 
-__version__ = "0.5.1"
+__version__ = "0.5.3"
 
 URL = "https://storage.ecmwf.europeanweather.cloud"
 PATTERN = "{url}/MAELSTROM_AP3/{inout}_{date}00_{timestep}c{patch}.nc"
@@ -85,6 +85,7 @@ class radiation(Dataset):
         heating_rate=True,
         hr_units="K s-1",
         topnetflux=False,
+        gather_fluxes=False,
     ):
 
         self.icol_keys = [
@@ -127,6 +128,8 @@ class radiation(Dataset):
         self.raw_inputs = raw_inputs
         self.heating_rate = heating_rate
         self.minimal_outputs = minimal_outputs
+        self.gather_fluxes = gather_fluxes
+        assert not (self.minimal_outputs and self.gather_fluxes), "Can't use minimal_outputs and gather_fluxes together"
         self.topnetflux = topnetflux
         self.all_outputs = all_outputs
         self.hr_units = hr_units
@@ -238,6 +241,10 @@ class radiation(Dataset):
             if self.minimal_outputs:
                 output_list = ["fluxes_sw", "fluxes_lw"]
                 ds_outputs = self.get_minimal_outputs(ds_outputs)
+            if self.gather_fluxes:
+                output_list = ["lw","sw"]
+                ds_outputs["lw"] = self.get_fluxes(ds_outputs,"lw")
+                ds_outputs["sw"] = self.get_fluxes(ds_outputs,"sw")
             if self.heating_rate:
                 output_list += ["hr_sw", "hr_lw"]
             ds_outputs = ds_outputs[output_list]
