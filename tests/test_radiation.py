@@ -12,9 +12,7 @@ import climetlab as cml
 
 def test_read():
     ds = cml.load_dataset(
-        "maelstrom-radiation-radiation",
-        year="2021",
-        parameter="t2m",
+        "maelstrom-radiation",
     )
     xds = ds.to_xarray()
     print(xds)
