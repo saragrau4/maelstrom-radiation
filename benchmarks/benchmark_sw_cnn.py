@@ -56,48 +56,46 @@ def load_data(batch_size = 256, sample_data = False,
               synthetic_data = False
           ):
 
-    if synthetic_data:
-        from synthdata import get_synth_dataset
-        print("Creating synthetic data for pipeline testing")
-        if sample_data:
-            train = get_synth_dataset(batch_size, dataset_size = 256 * 265)
-            val = get_synth_dataset(batch_size, dataset_size = 256 * 265)
-        else:
-            train = get_synth_dataset(batch_size, dataset_size = 256 * 11660)
-            val = get_synth_dataset(batch_size, dataset_size = 256 * 795)
-
+    kwargs = {'hr_units':'K d-1',
+              'norm':False,
+              'minimal_outputs':True,
+              'topnetflux':True,
+              'dataset':'tripleclouds',
+              'output_fields':['sw','hr_sw']}
+    if sample_data:
+        train_ts = [0]
+        train_fn = [0]
+        val_ts = 2019013100
+        val_fn = [0]
+        train_num = 265 * 256 // batch_size
+        val_num = 265 * 256 // batch_size
     else:
-            
-        kwargs = {'hr_units':'K d-1',
-                  'norm':False,
-                  'minimal_outputs':True,
-                  'topnetflux':True,
-                  'dataset':'tripleclouds',
-                  'output_fields':['sw','hr_sw']}
-        if sample_data:
-            train_ts = [0]
-            train_fn = [0]
-            val_ts = 2019013100
-            val_fn = [0]
-        else:
-            train_ts = list(range(0,3501,1000)) # 500))
-            train_fn = list(range(0,51,5))
-            val_ts = 2019013100
-            val_fn = [0, 25, 50] # 5, 10, 15, 20, 25, 30, 35, 40, 45, 50]
-            
-        ds_cml = cml.load_dataset('maelstrom-radiation-tf',
-                                  timestep = train_ts,
-                                  filenum = train_fn,
-                                  **kwargs)
+        train_ts = list(range(0,3501,1000)) # 500))
+        train_fn = list(range(0,51,5))
+        val_ts = 2019013100
+        val_fn = [0, 25, 50] # 5, 10, 15, 20, 25, 30, 35, 40, 45, 50]
+        val_num = 795 * 256 // batch_size
+        train_num = 11660 * 256 // batch_size
         
-        train = ds_cml.to_tfdataset(batch_size=batch_size,shuffle=True)
+    ds_cml = cml.load_dataset('maelstrom-radiation-tf',
+                              timestep = train_ts,
+                              filenum = train_fn,
+                              **kwargs)
+    
+    train = ds_cml.to_tfdataset(batch_size=batch_size,shuffle=True)
+    
+    ds_cml_val = cml.load_dataset('maelstrom-radiation-tf',
+                                  timestep = val_ts,
+                                  filenum = val_fn,
+                                  **kwargs)
+    
+    val = ds_cml_val.to_tfdataset(batch_size=batch_size,shuffle=False)
 
-        ds_cml_val = cml.load_dataset('maelstrom-radiation-tf',
-                                      timestep = val_ts,
-                                      filenum = val_fn,
-                                      **kwargs)
 
-        val = ds_cml_val.to_tfdataset(batch_size=batch_size,shuffle=False)
+    if synthetic_data:
+        print("Creating synthetic data by repeating single batch, useful for pipeline testing.")
+        train = train.take(1).cache().repeat(train_num)
+        val = val.take(1).cache().repeat(val_num)
 
     return train,val
 
@@ -197,7 +195,6 @@ def buildmodel(
     swf = Multiply()([swf,in_solar])
     swf = TopFlux(name='sw')([swf,sw_hr,hl_p])
 
-    
     #Dictionary of outputs
     output = {'hr_sw':sw_hr,
              'sw':swf}
