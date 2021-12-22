@@ -25,6 +25,14 @@ for key in norms:
     norms[key][norms[key]==0] = 1
 norms
 
+class EpochTimingCallback(Callback):
+    # def __init__(self):
+    #     self.batch_times = []
+        # self.logs=[]
+    def on_epoch_begin(self, epoch, logs=None):
+        self.starttime=time()
+    def on_epoch_end(self, epoch, logs=None):
+        logs['epoch_time'] = (time()-self.starttime)
 
 class TimingCallback(Callback):
     # def __init__(self):
@@ -44,37 +52,52 @@ class TimingCallback(Callback):
         logs['mean_batch'] = mean_batch
         logs['max_batch'] = max_batch
 
-def load_data(batch_size = 256, sample_data = False):
-    kwargs = {'hr_units':'K d-1',
-              'norm':False,
-              'minimal_outputs':True,
-              'topnetflux':True,
-              'dataset':'tripleclouds',
-              'output_fields':['sw','hr_sw']}
-    if sample_data:
-        train_ts = [0]
-        train_fn = [0]
-        val_ts = 2019013100
-        val_fn = [0]
+def load_data(batch_size = 256, sample_data = False,
+              synthetic_data = False
+          ):
+
+    if synthetic_data:
+        from synthdata import get_synth_dataset
+        print("Creating synthetic data for pipeline testing")
+        if sample_data:
+            train = get_synth_dataset(batch_size, dataset_size = 256 * 265)
+            val = get_synth_dataset(batch_size, dataset_size = 256 * 265)
+        else:
+            train = get_synth_dataset(batch_size, dataset_size = 256 * 11660)
+            val = get_synth_dataset(batch_size, dataset_size = 256 * 795)
+
     else:
-        train_ts = list(range(0,3501,1000)) # 500))
-        train_fn = list(range(0,51,5))
-        val_ts = 2019013100
-        val_fn = [0, 25, 50] # 5, 10, 15, 20, 25, 30, 35, 40, 45, 50]
+            
+        kwargs = {'hr_units':'K d-1',
+                  'norm':False,
+                  'minimal_outputs':True,
+                  'topnetflux':True,
+                  'dataset':'tripleclouds',
+                  'output_fields':['sw','hr_sw']}
+        if sample_data:
+            train_ts = [0]
+            train_fn = [0]
+            val_ts = 2019013100
+            val_fn = [0]
+        else:
+            train_ts = list(range(0,3501,1000)) # 500))
+            train_fn = list(range(0,51,5))
+            val_ts = 2019013100
+            val_fn = [0, 25, 50] # 5, 10, 15, 20, 25, 30, 35, 40, 45, 50]
+            
+        ds_cml = cml.load_dataset('maelstrom-radiation-tf',
+                                  timestep = train_ts,
+                                  filenum = train_fn,
+                                  **kwargs)
+        
+        train = ds_cml.to_tfdataset(batch_size=batch_size,shuffle=True)
 
-    ds_cml = cml.load_dataset('maelstrom-radiation-tf',
-                              timestep = train_ts,
-                              filenum = train_fn,
-                              **kwargs)
+        ds_cml_val = cml.load_dataset('maelstrom-radiation-tf',
+                                      timestep = val_ts,
+                                      filenum = val_fn,
+                                      **kwargs)
 
-    train = ds_cml.to_tfdataset(batch_size=batch_size,shuffle=True)
-
-    ds_cml_val = cml.load_dataset('maelstrom-radiation-tf',
-                              timestep = val_ts,
-                              filenum = val_fn,
-                              **kwargs)
-
-    val = ds_cml_val.to_tfdataset(batch_size=batch_size,shuffle=False)
+        val = ds_cml_val.to_tfdataset(batch_size=batch_size,shuffle=False)
 
     return train,val
 
@@ -188,15 +211,18 @@ def buildmodel(
     return model
 
 
-def main(batch_size = 256, epochs = 5, sample_data = False):
+def main(batch_size = 256, epochs = 5, sample_data = False,
+         synthetic_data = False,
+):
     print("Getting training/validation data")
     train,val = load_data(batch_size = batch_size,
-                          sample_data = sample_data
+                          sample_data = sample_data,
+                          synthetic_data = synthetic_data,
     )
     model = buildmodel(train.element_spec[0], 
                        train.element_spec[1])
 
-    callbacks = [ TimingCallback(),
+    callbacks = [ EpochTimingCallback(), # TimingCallback(),
                   tf.keras.callbacks.CSVLogger('training.log'),
                   # tf.keras.callbacks.TensorBoard(log_dir='/data/mchantry/tensorboard',
                   #                               update_freq = 'batch',
@@ -215,9 +241,13 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Run benchmark')
     parser.add_argument('--sample_data',help="Use small dataset for bugtesting", action='store_const',
                         const = True, default = False)
+    parser.add_argument('--synthetic_data',help="Use synthetic dataset for pipeline testing", action='store_const',
+                        const = True, default = False)
     parser.add_argument('--batch', type=int, default=256)
     parser.add_argument('--epochs', type=int, default=5)
     args = parser.parse_args()
     main(batch_size = args.batch,
          epochs = args.epochs,
-         sample_data = args.sample_data)
+         sample_data = args.sample_data,
+         synthetic_data = args.synthetic_data
+)
