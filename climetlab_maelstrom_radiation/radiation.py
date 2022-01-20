@@ -16,7 +16,7 @@ import xarray as xr
 from climetlab import Dataset
 from climetlab.decorators import normalize
 
-__version__ = "0.5.3"
+__version__ = "0.5.4"
 
 URL = "https://storage.ecmwf.europeanweather.cloud"
 PATTERN = "{url}/MAELSTROM_AP3/{inout}_{date}00_{timestep}c{patch}.nc"
@@ -62,7 +62,11 @@ class radiation(Dataset):
         "If you do not agree with such terms, do not download the data. "
     )
 
-    @normalize("dataset", ["mcica", "tripleclouds", "3dcorrection"], multiple=False)
+    @normalize(
+        "dataset",
+        ["mcica", "tripleclouds", "3dcorrection", "spartacus"],
+        multiple=False,
+    )
     @normalize(
         "date",
         valid_date,
@@ -122,14 +126,16 @@ class radiation(Dataset):
             "mcica": "rad4NN_outputs",
             "3dcorrection": "3dcorrection_outputs",
             "tripleclouds": "triplecloud_outputs",
-            # 'spartacus' : 'spartacus_outputs',
+            "spartacus": "spartacus_outputs",
         }
 
         self.raw_inputs = raw_inputs
         self.heating_rate = heating_rate
         self.minimal_outputs = minimal_outputs
         self.gather_fluxes = gather_fluxes
-        assert not (self.minimal_outputs and self.gather_fluxes), "Can't use minimal_outputs and gather_fluxes together"
+        assert not (
+            self.minimal_outputs and self.gather_fluxes
+        ), "Can't use minimal_outputs and gather_fluxes together"
         self.topnetflux = topnetflux
         self.all_outputs = all_outputs
         self.hr_units = hr_units
@@ -213,15 +219,21 @@ class radiation(Dataset):
         ds["fluxes_lw"] = self._boundary_flux(flux)
         return ds
 
-    def _boundary_flux(self,flux):
+    def _boundary_flux(self, flux):
         if self.topnetflux:
             flux = xr.concat(
-                [flux[..., :1, 0] - flux[..., :1, 1], flux[..., -1:, 0], flux[..., -1:, -1]], dim="half_level"
+                [
+                    flux[..., :1, 0] - flux[..., :1, 1],
+                    flux[..., -1:, 0],
+                    flux[..., -1:, -1],
+                ],
+                dim="half_level",
             )
             flux = flux.rename({"half_level": "boundaries"})
         else:
             flux = xr.concat(
-                [flux[..., :1, 1], flux[..., -1:, 0], flux[..., -1:, -1]], dim="half_level"
+                [flux[..., :1, 1], flux[..., -1:, 0], flux[..., -1:, -1]],
+                dim="half_level",
             )
             flux = flux.rename({"half_level": "boundaries"})
         return flux
@@ -242,9 +254,9 @@ class radiation(Dataset):
                 output_list = ["fluxes_sw", "fluxes_lw"]
                 ds_outputs = self.get_minimal_outputs(ds_outputs)
             if self.gather_fluxes:
-                output_list = ["lw","sw"]
-                ds_outputs["lw"] = self.get_fluxes(ds_outputs,"lw")
-                ds_outputs["sw"] = self.get_fluxes(ds_outputs,"sw")
+                output_list = ["lw", "sw"]
+                ds_outputs["lw"] = self.get_fluxes(ds_outputs, "lw")
+                ds_outputs["sw"] = self.get_fluxes(ds_outputs, "sw")
             if self.heating_rate:
                 output_list += ["hr_sw", "hr_lw"]
             ds_outputs = ds_outputs[output_list]
@@ -263,38 +275,39 @@ class radiation(Dataset):
             "hl_inputs": hl_inputs,
             "pressure_hl": hl_pressure,
             "inter_inputs": inter_inputs,
-            "lat":inputs_ds.lat,
-            "lon":inputs_ds.lon,
+            "lat": inputs_ds.lat,
+            "lon": inputs_ds.lon,
         }
-        
-    def to_tfdataset(self, keys = [], example_dim='column'):
+
+    def to_tfdataset(self, keys=[], example_dim="column"):
         import tensorflow as tf
 
         dsx = self.to_xarray()
         if len(keys) == 0:
             print("Using all keys")
-            keys = ds.keys()
-        # Build generator 
+            keys = dsx.keys()
+
+        # Build generator
+
         def generate():
             for s in dsx[example_dim]:
                 inp = {}
                 for key in keys:
-                    inp[key] = dsx[key].sel({example_dim : s}).to_numpy()
+                    inp[key] = dsx[key].sel({example_dim: s}).to_numpy()
                 yield inp
-            
+
         # Get key sizes
         output_signature_inp = {}
         for key in keys:
-            example_data = dsx[key].isel({example_dim:0})
-            output_signature_inp[key] = tf.TensorSpec(example_data.shape,
-                                                      dtype = example_data.dtype,
-                                                      name = key   
-                                                  )        
+            example_data = dsx[key].isel({example_dim: 0})
+            output_signature_inp[key] = tf.TensorSpec(
+                example_data.shape, dtype=example_data.dtype, name=key
+            )
         return tf.data.Dataset.from_generator(
             generate,
-            output_signature=(output_signature_inp
-                          ),
+            output_signature=(output_signature_inp),
         )
+
 
 class Merger:
     def __init__(self, engine="netcdf4", concat_dim="column", options=None):
