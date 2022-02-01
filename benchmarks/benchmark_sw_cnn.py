@@ -24,6 +24,7 @@ for key in norms:
     norms[key][norms[key]==0] = 1
 norms
 
+# Callback to get the time per epoch and write to log
 class EpochTimingCallback(Callback):
     # def __init__(self):
     #     self.batch_times = []
@@ -33,6 +34,8 @@ class EpochTimingCallback(Callback):
     def on_epoch_end(self, epoch, logs=None):
         logs['epoch_time'] = (time()-self.starttime)
 
+# Callback to get the time per batch/epoch and write to log
+# NB this has a negative impact on performance
 class TimingCallback(Callback):
     # def __init__(self):
     #     self.batch_times = []
@@ -91,8 +94,6 @@ def load_data(batch_size = 256, sample_data = False,
     
     val = ds_cml_val.to_tfdataset(batch_size=batch_size,shuffle=False)
 
-    
-
     if synthetic_data:
         print("Creating synthetic data by repeating single batch, useful for pipeline testing.")
         train = train.take(1).cache().repeat(train_num)
@@ -104,6 +105,7 @@ def load_data(batch_size = 256, sample_data = False,
 
     return train,val
 
+# Custom layer for the end of our NN
 @tf.keras.utils.register_keras_serializable()
 class TopFlux(tf.keras.layers.Layer):
     def __init__(self,name=None,**kwargs):
@@ -177,6 +179,7 @@ def buildmodel(
                          kernel_size=kernel_width,
                          strides=1,padding='same',
                          data_format='channels_last',
+                         activation = nn.swish,
                         )(all_col)
 
     #Predict single output, the heating rate.
@@ -214,7 +217,7 @@ def buildmodel(
 
 
 def main(batch_size = 256, epochs = 5, sample_data = False,
-         synthetic_data = False, cache = True,
+         synthetic_data = False, tensorboard = False, cache = True,
 ):
     print("Getting training/validation data")
     total_start = time()
@@ -229,12 +232,15 @@ def main(batch_size = 256, epochs = 5, sample_data = False,
 
     callbacks = [ EpochTimingCallback(), # TimingCallback(),
                   tf.keras.callbacks.CSVLogger('training.log'),
-                  # tf.keras.callbacks.TensorBoard(log_dir='/data/mchantry/tensorboard',
-                  #                               update_freq = 'batch',
-                  #                               write_steps_per_second = True,
-                  #                               histogram_freq = 0),
     ]
     train_start = time()
+    if tensorboard:
+        callbacks.append(tf.keras.callbacks.TensorBoard(log_dir='logs',
+                                                        update_freq = 'epoch',
+                                                        write_steps_per_second = True,
+                                                        profile_batch = '350,500',
+                                                        histogram_freq = 1))
+                                                    
     hist = model.fit(train, 
                      validation_data=val, 
                      epochs = epochs,
@@ -265,10 +271,13 @@ if __name__ == "__main__":
     parser.add_argument('--epochs', type=int, default=5)
     parser.add_argument('--nocache',help="Don't cache dataset", action='store_const',
                         const = True, default = False)
+    parser.add_argument('--tensorboard',help="Use Tensorboard to log data", action='store_const',
+                        const = True, default = False)
     args = parser.parse_args()
     main(batch_size = args.batch,
          epochs = args.epochs,
          sample_data = args.sample_data,
          synthetic_data = args.synthetic_data,
+         tensorboard = args.tensorboard,
          cache = (not args.nocache),
     )
