@@ -224,8 +224,12 @@ def main(batch_size = 256, epochs = 5, sample_data = False,
                           cache = cache,
     )
     load_time = time() - total_start
-    model = buildmodel(train.element_spec[0], 
-                       train.element_spec[1])
+    physical_devices = tf.config.list_physical_devices('GPU')
+    print(physical_devices)
+    strategy = tf.distribute.MirroredStrategy()
+    with strategy.scope():
+        model = buildmodel(train.element_spec[0], 
+                           train.element_spec[1])
 
     callbacks = [ EpochTimingCallback(), # TimingCallback(),
                   tf.keras.callbacks.CSVLogger('training.log'),
