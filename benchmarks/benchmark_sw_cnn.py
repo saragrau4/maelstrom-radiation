@@ -144,6 +144,7 @@ def buildmodel(
     flux_layers = 3,
     flux_filters = 8,
     flux_width = 32,
+    batch_size = 256,
               ):
     inputs = {}
 
@@ -212,7 +213,7 @@ def buildmodel(
                         'sw':'mse'},
                   loss_weights = {'hr_sw':10**(3),
                         'sw':1},
-                  optimizer=Adam(10**(-5)))
+                  optimizer=Adam(10**(-5)*batch_size/256))
     return model
 
 
@@ -228,7 +229,9 @@ def main(batch_size = 256, epochs = 5, sample_data = False,
     )
     load_time = time() - total_start
     model = buildmodel(train.element_spec[0], 
-                       train.element_spec[1])
+                       train.element_spec[1],
+                       batch_size = batch_size,
+    )
 
     callbacks = [ EpochTimingCallback(), # TimingCallback(),
                   tf.keras.callbacks.CSVLogger('training.log'),
