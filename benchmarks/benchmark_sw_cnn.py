@@ -1,4 +1,5 @@
 from time import time
+import sys
 
 import os
 # To hide GPU uncomment
@@ -79,6 +80,9 @@ def load_data(batch_size = 256, sample_data = False,
         val_fn = [0, 25, 50] # 5, 10, 15, 20, 25, 30, 35, 40, 45, 50]
         val_num = 795 * 256 // batch_size
         train_num = 11660 * 256 // batch_size
+
+    print("Climetlab cache dir")
+    print(cml.settings.get('cache-directory'))
         
     ds_cml = cml.load_dataset('maelstrom-radiation-tf',
                               timestep = train_ts,
@@ -214,11 +218,50 @@ def buildmodel(
                   loss_weights = {'hr_sw':10**(3),
                         'sw':1},
                   optimizer=Adam(10**(-5)*batch_size/256))
+    model.summary()
     return model
 
+def printstats(total_time,
+               train_time,
+               load_time,
+               save_time,
+               batch_size):
+
+    print("---------------------------------------------------")
+    print("Timing statistics")
+    print("---------------------------------------------------")
+    print("Total time: ",total_time)
+    print("Load time: ",load_time)
+    print("Train time: ",train_time)
+    print("Save time: ",save_time)
+    print("---------------------------------------------------")
+    data_size = 2984960
+    
+    rundata = np.loadtxt('training.log',skiprows=1,delimiter=',')
+    epochs = rundata.shape[0]
+
+    av_train = train_time / epochs
+    first_ep = rundata[0,1]
+    min_ep = rundata[:,1].min()
+    max_ep = rundata[:,1].max()
+    n_iter = np.ceil(data_size / batch_size)*epochs
+    av_iter = train_time / n_iter
+    final_loss = rundata[-1,3]
+    final_val = rundata[-1,6]
+    
+    print("load_time, total_time, train_time,"+
+          "av_train, first_ep, min_ep, max_ep, "+
+          "av_iter, final_loss, final_val, save_time")
+    prv = (load_time, total_time, train_time,+
+           av_train, first_ep, min_ep, max_ep, +
+           av_iter, final_loss, final_val, save_time)
+    fmt = ", ".join(["%.6f" for i in range(len(prv))])
+    print(fmt%prv)
+    return
 
 def main(batch_size = 256, epochs = 5, sample_data = False,
          synthetic_data = False, tensorboard = False, cache = True,
+         gpus = 1
 ):
     print("Getting training/validation data")
     total_start = time()
@@ -227,17 +270,33 @@ def main(batch_size = 256, epochs = 5, sample_data = False,
                           synthetic_data = synthetic_data,
                           cache = cache,
     )
+    print("Data loaded")
     load_time = time() - total_start
-    model = buildmodel(train.element_spec[0], 
-                       train.element_spec[1],
-                       batch_size = batch_size,
-    )
+
+    if gpus == 1:
+        model = buildmodel(train.element_spec[0], 
+                           train.element_spec[1],
+                           batch_size = batch_size,
+        )
+    elif gpus == 2:
+        physical_devices = tf.config.list_physical_devices('GPU')
+        print(physical_devices)
+        strategy = tf.distribute.MirroredStrategy()
+        with strategy.scope():
+            model = buildmodel(train.element_spec[0], 
+                               train.element_spec[1],
+                               batch_size = batch_size,
+            )
+    else:
+        assert False, f"{gpus} gpus not acceptable"
+
 
     callbacks = [ EpochTimingCallback(), # TimingCallback(),
                   tf.keras.callbacks.CSVLogger('training.log'),
     ]
     train_start = time()
     if tensorboard:
+        print("Adding tensorboard callback")
         callbacks.append(tf.keras.callbacks.TensorBoard(log_dir='logs',
                                                         update_freq = 'epoch',
                                                         write_steps_per_second = True,
@@ -251,16 +310,12 @@ def main(batch_size = 256, epochs = 5, sample_data = False,
                      callbacks = callbacks,
                  )
     train_time = time() - train_start
+    save_start = time()
+    model.save("trained_model.h5")
+    save_time = time() - save_start
     total_time = time() - total_start
 
-    print("---------------------------------------------------")
-    print("Timing statistics")
-    print("---------------------------------------------------")
-    print("Total time: ",total_time)
-    print("Load time: ",load_time)
-    print("Train time: ",train_time)
-    print("---------------------------------------------------")
-    
+    printstats(total_time, train_time, load_time, save_time, batch_size)
     
     
 if __name__ == "__main__":
@@ -270,12 +325,14 @@ if __name__ == "__main__":
                         const = True, default = False)
     parser.add_argument('--synthetic_data',help="Use synthetic dataset for pipeline testing", action='store_const',
                         const = True, default = False)
-    parser.add_argument('--batch', type=int, default=256)
+    parser.add_argument('--batch', type=int, default=512)
     parser.add_argument('--epochs', type=int, default=5)
     parser.add_argument('--nocache',help="Don't cache dataset", action='store_const',
                         const = True, default = False)
     parser.add_argument('--tensorboard',help="Use Tensorboard to log data", action='store_const',
                         const = True, default = False)
+    parser.add_argument('--gpus', type=int, default=1)
+
     args = parser.parse_args()
     main(batch_size = args.batch,
          epochs = args.epochs,
@@ -283,4 +340,5 @@ if __name__ == "__main__":
          synthetic_data = args.synthetic_data,
          tensorboard = args.tensorboard,
          cache = (not args.nocache),
+         gpus = args.gpus
     )
