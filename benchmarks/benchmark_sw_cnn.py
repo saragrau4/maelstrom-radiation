@@ -13,10 +13,8 @@ from tensorflow.keras.models import Model
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.callbacks import Callback
 
-# physical_devices = tf.config.list_physical_devices('GPU')
-# if len(physical_devices) > 0:
-#     tf.config.experimental.set_memory_growth(physical_devices[0], True)
 import climetlab as cml
+cml.settings.set('check-out-of-date-urls',True)
 
 import numpy as np
 norms = np.load('inp_max_norm.npy',allow_pickle=True)
@@ -261,7 +259,7 @@ def printstats(total_time,
 
 def main(batch_size = 256, epochs = 5, sample_data = False,
          synthetic_data = False, tensorboard = False, cache = True,
-         gpus = 1
+         gpus = 1, data_only = False
 ):
     print("Getting training/validation data")
     total_start = time()
@@ -272,6 +270,10 @@ def main(batch_size = 256, epochs = 5, sample_data = False,
     )
     print("Data loaded")
     load_time = time() - total_start
+    if data_only:
+        print("Only loading data, quitting now")
+        print("Load time: ",load_time)
+        return
 
     if gpus == 1:
         model = buildmodel(train.element_spec[0], 
@@ -325,6 +327,8 @@ if __name__ == "__main__":
                         const = True, default = False)
     parser.add_argument('--synthetic_data',help="Use synthetic dataset for pipeline testing", action='store_const',
                         const = True, default = False)
+    parser.add_argument('--data_only',help="Only load data.", action='store_const',
+                        const = True, default = False)
     parser.add_argument('--batch', type=int, default=512)
     parser.add_argument('--epochs', type=int, default=5)
     parser.add_argument('--nocache',help="Don't cache dataset", action='store_const',
@@ -340,5 +344,6 @@ if __name__ == "__main__":
          synthetic_data = args.synthetic_data,
          tensorboard = args.tensorboard,
          cache = (not args.nocache),
-         gpus = args.gpus
+         gpus = args.gpus,
+         data_only = args.data_only,
     )
