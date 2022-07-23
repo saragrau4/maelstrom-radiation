@@ -110,7 +110,7 @@ class radiation_tf(Dataset):
     )
     def __init__(
         self,
-        dataset="mcica",
+        dataset="tripleclouds",
         subset=None,
         timestep=0,
         filenum=[0],
@@ -335,8 +335,13 @@ class radiation_tf(Dataset):
         repeat=False,
         equal_csza=False,
         dark_side=True,
+        shard_num: int = 1,
+        shard_idx: int = 1,
     ):
         ds = self.source.to_tfdataset(num_parallel_reads=AUTOTUNE)
+
+        if shard_num > 1:
+            ds = ds.shard(shard_num,shard_idx)
 
         if shuffle:
             ds = ds.shuffle(shuffle_size)
