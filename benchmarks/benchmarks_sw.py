@@ -100,7 +100,7 @@ def main(
         hvd.callbacks.BroadcastGlobalVariablesCallback(0),
         hvd.callbacks.MetricAverageCallback(),
         tf.keras.callbacks.ReduceLROnPlateau(
-            monitor="val_loss", factor=0.25, patience=5, verbose=1, min_lr=10 ** (-6)
+            monitor="val_loss", factor=0.25, patience=4, verbose=1, min_lr=10 ** (-6)
         ),
     ]
     if hvd.rank() == 0:

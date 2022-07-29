@@ -36,7 +36,7 @@ def load_data(
     if sample_data:
         train_ts = [0]
         train_fn = [0]
-        val_ts = 2019013100
+        val_ts = [2019013100]
         val_fn = [0]
     elif version == 1:
         train_ts = list(range(0, 3501, 1000))  # 500))
@@ -65,9 +65,8 @@ def load_data(
     ds_cml = cml.load_dataset(
         "maelstrom-radiation-tf", timestep=train_ts, filenum=train_fn, **kwargs
     )
-
     train = ds_cml.to_tfdataset(batch_size=batch_size, shuffle=True,
-        shard_num = shard_num, shard_idx = shard_idx,   
+        shard_num = shard_num, shard_idx = shard_idx, cache = cache,
     ) 
 
     ds_cml_val = cml.load_dataset(
@@ -75,7 +74,7 @@ def load_data(
     )
 
     val = ds_cml_val.to_tfdataset(batch_size=batch_size, shuffle=False,
-        shard_num = shard_num, shard_idx = shard_idx, 
+        shard_num = shard_num, shard_idx = shard_idx, cache = cache,
     )
 
     if synthetic_data:
@@ -84,9 +83,9 @@ def load_data(
         )
         train = train.take(1).cache().repeat(train_num)
         val = val.take(1).cache().repeat(val_num)
-    elif cache:
-        print("Caching dataset, increase memory use, decreased runtime")
-        train = train.cache()
-        val = val.cache()
+    #elif cache:
+    #    print("Caching dataset, increase memory use, decreased runtime")
+    #    train = train.cache()
+    #    val = val.cache()
 
     return train, val
