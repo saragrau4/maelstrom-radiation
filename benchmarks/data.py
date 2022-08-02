@@ -7,16 +7,15 @@ norms = np.load("inp_max_norm.npy", allow_pickle=True)
 norms = norms[()]
 for key in norms:
     norms[key][norms[key] == 0] = 1
-norms
 
 
 def load_data(
+    mode="train",
     batch_size=256,
     minimal=True,
-    sample_data=False,
     synthetic_data=False,
     cache=False,
-    version=1,
+    tier=1,
     shard_num=1,
     shard_idx=1,
 ):
@@ -33,48 +32,29 @@ def load_data(
     else:
         kwargs["minimal_outputs"] = False
 
-    if sample_data:
-        train_ts = [0]
-        train_fn = [0]
-        val_ts = [2019013100]
-        val_fn = [0]
-    elif version == 1:
-        train_ts = list(range(0, 3501, 1000))  # 500))
-        train_fn = list(range(0, 51, 5))
-        val_ts = [2019013100, 2019082900]
-        val_fn = [0, 25, 50] 
-    elif version == 2:
-        train_ts = list(range(0, 3501, 125))  # 500))
-        train_fn = list(range(0, 51, 5))
-        val_ts = [2019013100, 2019082900]
-        val_fn = [0, 25, 50]  
-    elif version == 3:
-        train_ts = list(range(0, 3501, 250))  # 500))
-        train_fn = list(range(0, 51, 5))
-        val_ts = [2019013100, 2019082900]
-        val_fn = [0, 25, 50] 
-    else:
-        assert False, f"Version {version} not supported"
 
-    train_num = 67840 * len(train_ts) * len(train_fn) // shard_num
-    val_num = 67840 * len(val_ts) * len(val_fn) // shard_num
+    assert tier in [1,2,3], f"Tier {tier} not supported"
 
     print("Climetlab cache dir")
     print(cml.settings.get("cache-directory"))
 
+    tiername = f"tier-{tier}"
+    assert mode in ["train","val","test"], f"{mode} not train/val/test"
+    
+    if mode in ["val","test"]:
+        tiername = tiername + f"-{mode}"
+
     ds_cml = cml.load_dataset(
-        "maelstrom-radiation-tf", timestep=train_ts, filenum=train_fn, **kwargs
-    )
-    train = ds_cml.to_tfdataset(batch_size=batch_size, shuffle=True,
-        shard_num = shard_num, shard_idx = shard_idx, cache = cache,
-    ) 
-
-    ds_cml_val = cml.load_dataset(
-        "maelstrom-radiation-tf", timestep=val_ts, filenum=val_fn, **kwargs
+        "maelstrom-radiation-tf", subset = tiername, **kwargs
     )
 
-    val = ds_cml_val.to_tfdataset(batch_size=batch_size, shuffle=False,
-        shard_num = shard_num, shard_idx = shard_idx, cache = cache,
+    train_num = ds_cml.numcolumns // shard_num
+    train = ds_cml.to_tfdataset(
+        batch_size=batch_size,
+        shuffle=True,
+        shard_num=shard_num,
+        shard_idx=shard_idx,
+        cache=cache,
     )
 
     if synthetic_data:
@@ -82,10 +62,13 @@ def load_data(
             "Creating synthetic data by repeating single batch, useful for pipeline testing."
         )
         train = train.take(1).cache().repeat(train_num)
-        val = val.take(1).cache().repeat(val_num)
-    #elif cache:
-    #    print("Caching dataset, increase memory use, decreased runtime")
-    #    train = train.cache()
-    #    val = val.cache()
 
+    return train
+
+
+def load_train_val_data(
+    **kwargs
+):
+    train = load_data(mode="train",**kwargs)
+    val = load_data(mode="val",**kwargs)
     return train, val

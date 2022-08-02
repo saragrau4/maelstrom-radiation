@@ -8,8 +8,8 @@ import tensorflow as tf
 from tensorflow.keras.optimizers import Adam
 
 from utils import EpochTimingCallback, printstats  # TimingCallback,
-from data import load_data
-from models import build_cnn, build_rnn
+from data import load_train_val_data
+from models import build_cnn, build_fullcnn, build_rnn
 import losses
 import horovod.keras as hvd
 import wandb
@@ -19,13 +19,12 @@ from wandb.keras import WandbCallback
 def main(
     batch_size=256,
     epochs=5,
-    sample_data=False,
     synthetic_data=False,
     cache=True,
     data_only=False,
     run_no=0,
     model_type="min_cnn",
-    data_version=1,
+    tier=1,
 ):
 
     # Horovod: initialize Horovod.
@@ -46,15 +45,14 @@ def main(
 
     print("Getting training/validation data")
     total_start = time()
-    train, val = load_data(
+    train,val = load_train_val_data(
         batch_size=batch_size,
-        sample_data=sample_data,
         synthetic_data=synthetic_data,
         cache=cache,
         minimal=minimal,
-        version=data_version,
-        shard_num = hvd.size(),
-        shard_idx = hvd.local_rank(),
+        tier=tier,
+        shard_num=hvd.size(),
+        shard_idx=hvd.local_rank(),
     )
     print("Data loaded")
     load_time = time() - total_start
@@ -78,7 +76,15 @@ def main(
         )
         loss = {"hr_sw": "mae", "sw": losses.top_scaledflux_mae}
         weights = {"hr_sw": 10 ** (-1), "sw": 1}
-        lr = 10 ** (-3)
+        lr = 0.5 * 10 ** (-3)
+    elif model_type == "cnn":
+        model = build_fullcnn(
+            train.element_spec[0],
+            train.element_spec[1],
+        )
+        loss = {"hr_sw": "mae", "sw": losses.top_scaledflux_mae}
+        weights = {"hr_sw": 10 ** (-1), "sw": 1}
+        lr = 4 * 10 ** (-4)
     else:
         assert False, f"{model_type} not configured"
 
@@ -102,13 +108,19 @@ def main(
         tf.keras.callbacks.ReduceLROnPlateau(
             monitor="val_loss", factor=0.25, patience=4, verbose=1, min_lr=10 ** (-6)
         ),
+        tf.keras.callbacks.EarlyStopping(
+            monitor="val_loss",
+            min_delta=0,
+            patience=6,
+            verbose=2,
+            mode="auto",
+            restore_best_weights=True,
+        ),
     ]
     if hvd.rank() == 0:
         wandb.init(project="tripleclouds_Kd")
         callbacks.append(EpochTimingCallback())
-        callbacks.append(
-            tf.keras.callbacks.CSVLogger(logfile)
-            )
+        callbacks.append(tf.keras.callbacks.CSVLogger(logfile))
         callbacks.append(
             tf.keras.callbacks.ModelCheckpoint(
                 f"./{model_type}-{run_no}" + "-{epoch}.h5"
@@ -139,13 +151,6 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Run benchmark")
     parser.add_argument(
-        "--sample_data",
-        help="Use small dataset for bugtesting",
-        action="store_const",
-        const=True,
-        default=False,
-    )
-    parser.add_argument(
         "--synthetic_data",
         help="Use synthetic dataset for pipeline testing",
         action="store_const",
@@ -160,7 +165,7 @@ if __name__ == "__main__":
         default=False,
     )
     parser.add_argument(
-        "--data_version",
+        "--tier",
         help="Dataset version",
         type=int,
         default=1,
@@ -182,11 +187,10 @@ if __name__ == "__main__":
     main(
         batch_size=args.batch,
         epochs=args.epochs,
-        sample_data=args.sample_data,
         synthetic_data=args.synthetic_data,
         cache=(not args.nocache),
         data_only=args.data_only,
         run_no=args.runno,
         model_type=args.model,
-        data_version=args.data_version
+        tier=args.tier,
     )

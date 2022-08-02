@@ -1,3 +1,4 @@
+import numpy as np
 from data import norms
 import tensorflow as tf
 from tensorflow import nn
@@ -18,6 +19,9 @@ from tensorflow.keras.layers import (
 from tensorflow.keras.models import Model
 from layers import TopFlux, rnncolumns, HRLayer
 
+activations = {'swish' : nn.swish,
+               'tanh' : nn.tanh,
+           }
 
 def build_cnn(
     input_shape,
@@ -142,7 +146,7 @@ def build_rnn(
 
     overlap_param = ZeroPadding1D(padding=(1, 1))(inter_inp)
 
-    lay_inp = rnncolumns(name="procCol")(lay_inp, hl_inp, cos_sza)
+    lay_inp = rnncolumns(name="procCol")([lay_inp, hl_inp, cos_sza])
 
     # 2. OUTPUTS
     # Outputs are the raw fluxes scaled by incoming flux
@@ -153,9 +157,7 @@ def build_rnn(
 
     hidden0, last_state = GRU(
         nneur, return_sequences=True, return_state=True, name="RNN1"
-    )(
-        lay_inp
-    )
+    )(lay_inp)
 
     last_state_plus_albedo = tf.concat([last_state, albedos], axis=1)
 
@@ -182,12 +184,12 @@ def build_rnn(
         hidden2
     )
 
-    #Scale by TOA downwards flux
+    # Scale by TOA downwards flux
     flux_sw = Multiply(name="sw")([flux_sw, incflux])
 
     outputs = {}
     outputs["sw"] = flux_sw
-    #Calculate HR
+    # Calculate HR
     if hr_loss:
         hr_sw = HRLayer(name="hr_sw")([flux_sw, hl_p])
         outputs["hr_sw"] = hr_sw
@@ -196,94 +198,101 @@ def build_rnn(
     return model
 
 
-def localdilatedcnn(inp_shape,
-                    out_shape,
-                    conv_filters=64,
-                    dilation_rates = [1,2,4,8,16],
-                    conv_layers = 2,
-                    kernel_width = 5,
-                    local_first=True,
-                    start_batch=False,
-                    col_start_batch=True,
-                    residual=False,
-                    max_norm=True,
-                    bn_mom = 0.5,
-                    activation = 'swish',
-                    attention = False,
-                    num_heads = 8
+def build_fullcnn(
+    inp_shape,
+    out_shape,
+    conv_filters=64,
+    dilation_rates=[1, 2, 4, 8, 16],
+    conv_layers=5,
+    kernel_width=5,
+    activation="swish",
+    attention=False,
+    num_heads=8,
 ):
-    #Assume inputs have the order
-    #scalar, column, hl, inter, pressure_hl
+    # Assume inputs have the order
+    # scalar, column, hl, inter, pressure_hl
     all_inp = []
     for k in inp_shape.keys():
         print(k)
-        all_inp.append(Input(inp_shape[k].shape[1:],name=k))
-        if k == 'sca_inputs':
-            in_solar = all_inp[-1][...,1:2]*all_inp[-1][...,-1:]
+        all_inp.append(Input(inp_shape[k].shape[1:], name=k))
+        if k == "sca_inputs":
+            in_solar = all_inp[-1][..., 1:2] * all_inp[-1][..., -1:]
     hl_p = all_inp[-1]
     first_layer = all_inp
 
-    norms = np.load('inp_max_norm.npy',allow_pickle=True)
+    norms = np.load("inp_max_norm.npy", allow_pickle=True)
     norms = norms[()]
     for key in norms:
-        norms[key][norms[key]==0] = 1
+        norms[key][norms[key] == 0] = 1
     second_layer = []
-    for i,k in enumerate(inp_shape.keys()):
-        second_layer.append(first_layer[i]/tf.constant(norms[k]))
+    for i, k in enumerate(inp_shape.keys()):
+        second_layer.append(first_layer[i] / tf.constant(norms[k]))
 
-    #Reshape inputs ready for merging.
+    # Reshape inputs ready for merging.
     rep_sca = RepeatVector(138)(second_layer[0])
-    col_inp = ZeroPadding1D(padding=(1,0))(second_layer[1])
-    inter_inp = ZeroPadding1D(padding=(1,1))(second_layer[3])
-    #Merge all inputs
-    all_col = Concatenate(axis=-1)([rep_sca,col_inp,second_layer[2],inter_inp])
-    if local_first:
-        all_col = LocallyConnected1D(filters=conv_filters,padding='same',kernel_size=1,
-                                     implementation=3,activation=activations[activation])(all_col)
-        
+    col_inp = ZeroPadding1D(padding=(1, 0))(second_layer[1])
+    inter_inp = ZeroPadding1D(padding=(1, 1))(second_layer[3])
+    # Merge all inputs
+    all_col = Concatenate(axis=-1)([rep_sca, col_inp, second_layer[2], inter_inp])
+
     for drate in dilation_rates:
-        all_col = Conv1D(filters=conv_filters,kernel_size = kernel_width, 
-                         dilation_rate = drate,padding='same',activation = activations[activation])(all_col)
+        all_col = Conv1D(
+            filters=conv_filters,
+            kernel_size=kernel_width,
+            dilation_rate=drate,
+            padding="same",
+            activation=activations[activation],
+        )(all_col)
 
     if attention:
-        # all_col = tf.keras.layers.Attention(name="attention_1")([all_col, all_col])
         key_dim = conv_filters // num_heads
-        all_col = tf.keras.layers.MultiHeadAttention(num_heads=num_heads,
-                                                     key_dim=key_dim,
-                                                     name="attention_1")(all_col, all_col)
+        all_col = tf.keras.layers.MultiHeadAttention(
+            num_heads=num_heads, key_dim=key_dim, name="attention_1"
+        )(all_col, all_col)
 
     for i in range(conv_layers):
-        if residual:
-            all_col = addresiduallayer(all_col, conv_filters, kernel_size = kernel_width,
-                                       batch_norm = True, bn_mom = bn_mom
-)
-        else:
-            all_col = Conv1D(filters=conv_filters, kernel_size = kernel_width, 
-                             dilation_rate = 1,padding='same',activation = activations[activation])(all_col)
+        all_col = Conv1D(
+            filters=conv_filters,
+            kernel_size=kernel_width,
+            dilation_rate=1,
+            padding="same",
+            activation=activations[activation],
+        )(all_col)
+
     if attention:
         key_dim = conv_filters // num_heads
-        all_col = tf.keras.layers.MultiHeadAttention(num_heads=num_heads,
-                                                     key_dim=key_dim,
-                                                     name="attention_2")(all_col, all_col)
+        all_col = tf.keras.layers.MultiHeadAttention(
+            num_heads=num_heads, key_dim=key_dim, name="attention_2"
+        )(all_col, all_col)
 
     outputs = {}
 
-    if 'lw' in out_shape.keys():
-        lwf = Conv1D(filters=2,padding='same',kernel_size=kernel_width,
-                     activation='softplus',name='lw')(all_col)
-        outputs['lw']=lwf
+    if "lw" in out_shape.keys():
+        lwf = Conv1D(
+            filters=2,
+            padding="same",
+            kernel_size=kernel_width,
+            activation="softplus",
+            name="lw",
+        )(all_col)
+        outputs["lw"] = lwf
 
+        if "hr_lw" in out_shape.keys():
+            outputs["hr_lw"] = HRLayer(name="hr_lw")([lwf, hl_p])
 
-    if 'sw' in out_shape.keys():
-        swf = Conv1D(filters=2,padding='same',kernel_size=kernel_width,
-                     activation='sigmoid',name='swm1')(all_col)
-        swf = Multiply(name='sw')([swf, in_solar])
-        outputs['sw']=swf
+    if "sw" in out_shape.keys():
+        swf = Conv1D(
+            filters=2,
+            padding="same",
+            kernel_size=kernel_width,
+            activation="sigmoid",
+            name="swm1",
+        )(all_col)
+        swf = Multiply(name="sw")([swf, in_solar])
+        outputs["sw"] = swf
 
-    if 'hr_sw' in out_shape.keys():
-        outputs['hr_sw'] = HRLayer(name='hr_sw')([swf,hl_p])
+        if "hr_sw" in out_shape.keys():
+            outputs["hr_sw"] = HRLayer(name="hr_sw")([swf, hl_p])
 
-    if 'hr_lw' in out_shape.keys():
-        outputs['hr_lw'] = HRLayer(name='hr_lw')([lwf,hl_p])
-
-    return all_inp,outputs
+    model = Model(all_inp, outputs)
+    return model
