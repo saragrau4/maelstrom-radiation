@@ -9,10 +9,9 @@ from tensorflow.keras.optimizers import Adam
 
 from utils import EpochTimingCallback, printstats  # TimingCallback,
 from data import load_data
-from models import build_cnn, build_fullcnn, build_rnn
-import losses
-import layers
+from models import load_model
 from pprint import pprint
+import plotting
 
 
 def main(
@@ -21,6 +20,7 @@ def main(
     model_path="model.h5",
     run_no=0,
     tier=1,
+    no_stats = False,
 ):
 
     gpus = tf.config.experimental.list_physical_devices("GPU")
@@ -42,26 +42,44 @@ def main(
     load_time = time() - total_start
 
     print(f"Loading model {model_path}")
-    custom_objects = {
-        "top_scaledflux_mse": losses.top_scaledflux_mse,
-        "top_scaledflux_mae": losses.top_scaledflux_mae,
-        "rnncolumns": layers.rnncolumns_old,
-    }
-    model = tf.keras.models.load_model(model_path, custom_objects=custom_objects)
+    model = load_model(model_path)
 
-    eval_start = time()
-    eval = model.evaluate(
-        test,
-        verbose=2,
+    gen_stats = (not no_stats)
+    if gen_stats:
+        eval_start = time()
+        eval = model.evaluate(
+            test,
+            verbose=2,
+        )
+        results = dict(zip(model.metrics_names, eval))
+        eval_time = time() - eval_start
+        total_time = time() - total_start
+        # printstats(eval)
+        results["load_time"] = load_time
+        results["eval_time"] = eval_time
+        results["total_time"] = total_time
+        pprint(results)
+
+    print("Making plots")
+    test_batch = load_data(
+        mode="test",
+        batch_size=4,
+        synthetic_data=synthetic_data,
+        cache=False,
+        minimal=False,
+        tier=tier,
+        shuffle=False,
+    ).take(1)
+    for inputs, outputs in test_batch:
+        pred = model.predict(inputs)
+
+    plotting.plotbatch_wc(
+        outputs,
+        pred,
+        to_plot=["sw_dn","sw_up","hr_sw"],
+        save_as=f"columns_{run_no}.png",
     )
-    results = dict(zip(model.metrics_names,eval))
-    eval_time = time() - eval_start
-    total_time = time() - total_start
-    #printstats(eval)
-    results['load_time'] = load_time
-    results['eval_time'] = eval_time
-    results['total_time'] = total_time
-    pprint(results)
+
 
 if __name__ == "__main__":
     import argparse
@@ -74,6 +92,15 @@ if __name__ == "__main__":
         const=True,
         default=False,
     )
+
+    parser.add_argument(
+        "--no_stats",
+        help="Don't calculate stats, just do plots",
+        action="store_const",
+        const=True,
+        default=False,
+    )
+
     parser.add_argument(
         "--tier",
         help="Dataset tier",
@@ -93,4 +120,5 @@ if __name__ == "__main__":
         model_path=args.model_path,
         run_no=args.runno,
         tier=args.tier,
+        no_stats = args.no_stats
     )

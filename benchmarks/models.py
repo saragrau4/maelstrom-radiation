@@ -17,11 +17,21 @@ from tensorflow.keras.layers import (
     GRU,
 )
 from tensorflow.keras.models import Model
-from layers import TopFlux, rnncolumns, HRLayer
+from layers import TopFlux, rnncolumns, HRLayer, rnncolumns_old
+import losses
 
 activations = {'swish' : nn.swish,
                'tanh' : nn.tanh,
            }
+
+def load_model(model_path):
+    custom_objects = {
+        "top_scaledflux_mse": losses.top_scaledflux_mse,
+        "top_scaledflux_mae": losses.top_scaledflux_mae,
+        "rnncolumns": rnncolumns_old,
+    }
+    return tf.keras.models.load_model(model_path, custom_objects=custom_objects)
+
 
 def build_cnn(
     input_shape,

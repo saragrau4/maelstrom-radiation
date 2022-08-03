@@ -18,6 +18,7 @@ def load_data(
     tier=1,
     shard_num=1,
     shard_idx=1,
+    shuffle=True,
 ):
 
     kwargs = {
@@ -51,7 +52,7 @@ def load_data(
     train_num = ds_cml.numcolumns // shard_num
     train = ds_cml.to_tfdataset(
         batch_size=batch_size,
-        shuffle=True,
+        shuffle=shuffle,
         shard_num=shard_num,
         shard_idx=shard_idx,
         cache=cache,
@@ -69,6 +70,6 @@ def load_data(
 def load_train_val_data(
     **kwargs
 ):
-    train = load_data(mode="train",**kwargs)
-    val = load_data(mode="val",**kwargs)
+    train = load_data(mode="train",shuffle=True, **kwargs)
+    val = load_data(mode="val", shuffle=False, **kwargs)
     return train, val

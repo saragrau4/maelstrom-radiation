@@ -9,12 +9,10 @@ from tensorflow.keras.optimizers import Adam
 
 from utils import EpochTimingCallback, printstats  # TimingCallback,
 from data import load_train_val_data
-from models import build_cnn, build_fullcnn, build_rnn
+from models import build_cnn, build_fullcnn, build_rnn, load_model
 import losses
 import horovod.keras as hvd
-import wandb
-from wandb.keras import WandbCallback
-
+#import mlflow.tensorflow
 
 def main(
     batch_size=256,
@@ -25,6 +23,8 @@ def main(
     run_no=0,
     model_type="min_cnn",
     tier=1,
+    continue_model="",
+    attention=False,
 ):
 
     # Horovod: initialize Horovod.
@@ -81,12 +81,16 @@ def main(
         model = build_fullcnn(
             train.element_spec[0],
             train.element_spec[1],
+            attention=attention,
         )
         loss = {"hr_sw": "mae", "sw": losses.top_scaledflux_mae}
         weights = {"hr_sw": 10 ** (-1), "sw": 1}
-        lr = 4 * 10 ** (-4)
+        lr = 2 * 10 ** (-4)
     else:
         assert False, f"{model_type} not configured"
+    if continue_model is not "":
+        print(f"Continuing {continue_model}")
+        model = load_model(continue_model)
 
     # Horovod: add Horovod Distributed Optimizer.
     opt = Adam(lr * batch_size / 256 * hvd.size())
@@ -118,7 +122,6 @@ def main(
         ),
     ]
     if hvd.rank() == 0:
-        wandb.init(project="tripleclouds_Kd")
         callbacks.append(EpochTimingCallback())
         callbacks.append(tf.keras.callbacks.CSVLogger(logfile))
         callbacks.append(
@@ -126,7 +129,6 @@ def main(
                 f"./{model_type}-{run_no}" + "-{epoch}.h5"
             )
         )
-        callbacks.append(WandbCallback())
 
     train_start = time()
     _ = model.fit(
@@ -165,6 +167,13 @@ if __name__ == "__main__":
         default=False,
     )
     parser.add_argument(
+        "--attention",
+        help="Use attention in CNN.",
+        action="store_const",
+        const=True,
+        default=False,
+    )
+    parser.add_argument(
         "--tier",
         help="Dataset version",
         type=int,
@@ -173,6 +182,7 @@ if __name__ == "__main__":
     parser.add_argument("--batch", type=int, default=512)
     parser.add_argument("--epochs", type=int, default=5)
     parser.add_argument("--model", type=str, default="min_cnn")
+    parser.add_argument("--continue_model", type=str, default="")
     parser.add_argument(
         "--nocache",
         help="Don't cache dataset",
@@ -193,4 +203,6 @@ if __name__ == "__main__":
         run_no=args.runno,
         model_type=args.model,
         tier=args.tier,
+        continue_model=args.continue_model,
+        attention=args.attention
     )
