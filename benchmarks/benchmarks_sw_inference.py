@@ -14,13 +14,14 @@ from pprint import pprint
 import plotting
 
 
-def main(
+def sw_inference(
     batch_size=256,
     synthetic_data=False,
     model_path="model.h5",
     run_no=0,
     tier=1,
     no_stats = False,
+    minimal = False,
 ):
 
     gpus = tf.config.experimental.list_physical_devices("GPU")
@@ -114,7 +115,7 @@ if __name__ == "__main__":
     parser.add_argument("--runno", type=int)
 
     args = parser.parse_args()
-    main(
+    sw_inference(
         batch_size=args.batch,
         synthetic_data=args.synthetic_data,
         model_path=args.model_path,

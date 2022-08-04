@@ -12,7 +12,9 @@ from data import load_train_val_data
 from models import build_cnn, build_fullcnn, build_rnn, load_model
 import losses
 import horovod.keras as hvd
-#import mlflow.tensorflow
+
+# import mlflow.tensorflow
+
 
 def main(
     batch_size=256,
@@ -21,10 +23,11 @@ def main(
     cache=True,
     data_only=False,
     run_no=0,
-    model_type="min_cnn",
+    model_type="cnn",
     tier=1,
     continue_model="",
     attention=False,
+    inference=False,
 ):
 
     # Horovod: initialize Horovod.
@@ -45,7 +48,7 @@ def main(
 
     print("Getting training/validation data")
     total_start = time()
-    train,val = load_train_val_data(
+    train, val = load_train_val_data(
         batch_size=batch_size,
         synthetic_data=synthetic_data,
         cache=cache,
@@ -77,6 +80,8 @@ def main(
         loss = {"hr_sw": "mae", "sw": losses.top_scaledflux_mae}
         weights = {"hr_sw": 10 ** (-1), "sw": 1}
         lr = 0.5 * 10 ** (-3)
+        if hvd.size() == 4:
+            lr = lr / 2
     elif model_type == "cnn":
         model = build_fullcnn(
             train.element_spec[0],
@@ -88,7 +93,8 @@ def main(
         lr = 2 * 10 ** (-4)
     else:
         assert False, f"{model_type} not configured"
-    if continue_model is not "":
+    
+    if len(continue_model) > 0 :
         print(f"Continuing {continue_model}")
         model = load_model(continue_model)
 
@@ -147,6 +153,18 @@ def main(
 
     printstats(logfile, total_time, train_time, load_time, save_time, batch_size)
 
+    # If rank 1, run inference
+    if hvd.rank() == 0 and inference:
+        from benchmarks_sw_inference import sw_inference
+        sw_inference(
+            model_path=f"{model_type}_{run_no}.h5",
+            batch_size=batch_size,
+            synthetic_data=synthetic_data,
+            tier=tier,
+            run_no=run_no,
+            minimal=minimal,
+        )
+
 
 if __name__ == "__main__":
     import argparse
@@ -179,6 +197,12 @@ if __name__ == "__main__":
         type=int,
         default=1,
     )
+    parser.add_argument(
+        "--inference",
+        help="Run inference on test set",
+        const=True,
+        default=False,
+    )
     parser.add_argument("--batch", type=int, default=512)
     parser.add_argument("--epochs", type=int, default=5)
     parser.add_argument("--model", type=str, default="min_cnn")
@@ -204,5 +228,6 @@ if __name__ == "__main__":
         model_type=args.model,
         tier=args.tier,
         continue_model=args.continue_model,
-        attention=args.attention
+        attention=args.attention,
+        inference=args.inference,
     )
