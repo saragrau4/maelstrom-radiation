@@ -43,18 +43,25 @@ features_size = {
 }
 
 timestep_subset = {
-    "tier-1": 0,
+    "tier-1": [0],
+    "tier-1-val": [2019013100],
+    "tier-1-test": [2019053100],
     "2020": list(range(0, 3501, 125)),
-    "2019013100": 2019013100,
-    "2019053100": 2019053100,
-    "2019082900": 2019082900,
-    "2019102800": 2019102800,
+    "2019013100": [2019013100],
+    "2019053100": [2019053100],
+    "2019082900": [2019082900],
+    "2019102800": [2019102800],
     "tier-2": list(range(0, 3501, 125)),
     "tier-2-val": [2019013100, 2019082900],
     "tier-2-test": [2019053100, 2019102800],
+    "tier-3": list(range(0, 3501, 1000)),
+    "tier-3-val": [2019013100, 2019082900],
+    "tier-3-test": [2019053100, 2019102800],
 }
 filenum_subset = {
-    "tier-1": 0,
+    "tier-1": [0],
+    "tier-1-val": [0],
+    "tier-1-test": [0],
     "2020": list(range(52)),
     "2019013100": list(range(116)),
     "2019053100": list(range(116)),
@@ -63,6 +70,9 @@ filenum_subset = {
     "tier-2": list(range(0,52,5)),
     "tier-2-val": [0, 25, 50],
     "tier-2-test": [0, 25, 50],
+    "tier-3": list(range(0,52,5)),
+    "tier-3-val": [0, 25, 50],
+    "tier-3-test": [0, 25, 50],
 }
 _num_norm = 0
 
@@ -118,7 +128,7 @@ class radiation_tf(Dataset):
         self,
         dataset="tripleclouds",
         subset=None,
-        timestep=0,
+        timestep=[0],
         filenum=[0],
         input_fields=[
             "sca_inputs",
@@ -139,6 +149,8 @@ class radiation_tf(Dataset):
     ):
         self.valid_subset = [
             "tier-1",
+            "tier-1-val",
+            "tier-1-test",
             "2020",
             "2019013100",
             "2019053100",
@@ -147,6 +159,9 @@ class radiation_tf(Dataset):
             "tier-2",
             "tier-2-val",
             "tier-2-test",
+            "tier-3",
+            "tier-3-val",
+            "tier-3-test",
         ]
         self.valid_timestep = list(range(0, 3501, 125)) + [
             2019013100,
@@ -226,6 +241,8 @@ class radiation_tf(Dataset):
         else:
             self.input_means, self.input_stds = self.load_norms()
             self.normfunc = self.normalise
+
+        self.numcolumns = 67840 * len(self.timestep) * len(self.filenum)
 
     def dataset_setup(self):
         global HEADURL
