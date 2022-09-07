@@ -26,8 +26,10 @@ def main(
     model_type="cnn",
     tier=1,
     continue_model="",
+    no_recompile=False,
     attention=False,
     inference=False,
+    no_tf32=False,
 ):
 
     # Horovod: initialize Horovod.
@@ -37,7 +39,9 @@ def main(
         minimal = True
     else:
         minimal = False
-
+    if no_tf32:
+        tf.config.experimental.enable_tensor_float_32_execution(False)
+        print("Turning off TF32 for cnn+attention")
     # Pin GPU to be used to process local rank (one GPU per process)
     gpus = tf.config.experimental.list_physical_devices("GPU")
     print(gpus)
@@ -93,22 +97,27 @@ def main(
         lr = 2 * 10 ** (-4)
     else:
         assert False, f"{model_type} not configured"
-    
-    if len(continue_model) > 0 :
+
+    if len(continue_model) > 0:
         print(f"Continuing {continue_model}")
         model = load_model(continue_model)
 
-    # Horovod: add Horovod Distributed Optimizer.
-    opt = Adam(lr * batch_size / 256 * hvd.size())
-    opt = hvd.DistributedOptimizer(opt)
+    if not no_recompile:
+        # Horovod: add Horovod Distributed Optimizer.
+        opt = Adam(lr * batch_size / 256 * hvd.size())
+        opt = hvd.DistributedOptimizer(opt)
 
-    model.compile(
-        loss=loss,
-        metrics={"hr_sw": ["mse", "mae"], "sw": ["mse", "mae"]},
-        loss_weights=weights,
-        optimizer=opt,
-        experimental_run_tf_function=False,
-    )
+        model.compile(
+            loss=loss,
+            metrics={"hr_sw": ["mse", "mae"], "sw": ["mse", "mae"]},
+            loss_weights=weights,
+            optimizer=opt,
+            experimental_run_tf_function=False,
+        )
+    else:
+        assert len(continue_model) > 0, "Cannot use no_recompile without continue_model"
+        assert hvd.size() == 1, "Not tested restarting with > 0 GPU"
+
     model.summary()
 
     logfile = f"training_{model_type}_{run_no}.log"
@@ -132,7 +141,13 @@ def main(
         callbacks.append(tf.keras.callbacks.CSVLogger(logfile))
         callbacks.append(
             tf.keras.callbacks.ModelCheckpoint(
-                f"./{model_type}-{run_no}" + "-{epoch}.h5"
+                f"./{model_type}_{run_no}_" + "{epoch}.h5",
+            )
+        )
+        callbacks.append(
+            tf.keras.callbacks.ModelCheckpoint(
+                f"./{model_type}_{run_no}.h5",
+                save_best_only=True,
             )
         )
 
@@ -145,17 +160,11 @@ def main(
         callbacks=callbacks,
     )
     train_time = time() - train_start
-    save_start = time()
-    if hvd.rank() == 0:
-        model.save(f"{model_type}_{run_no}.h5")
-    save_time = time() - save_start
-    total_time = time() - total_start
-
-    printstats(logfile, total_time, train_time, load_time, save_time, batch_size)
 
     # If rank 1, run inference
     if hvd.rank() == 0 and inference:
         from benchmarks_sw_inference import sw_inference
+
         sw_inference(
             model_path=f"{model_type}_{run_no}.h5",
             batch_size=batch_size,
@@ -164,6 +173,8 @@ def main(
             run_no=run_no,
             minimal=minimal,
         )
+    total_time = time() - total_start
+    printstats(logfile, total_time, train_time, load_time, save_time, batch_size)
 
 
 if __name__ == "__main__":
@@ -200,6 +211,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--inference",
         help="Run inference on test set",
+        action="store_const",
         const=True,
         default=False,
     )
@@ -208,8 +220,23 @@ if __name__ == "__main__":
     parser.add_argument("--model", type=str, default="min_cnn")
     parser.add_argument("--continue_model", type=str, default="")
     parser.add_argument(
+        "--no_recompile",
+        help="Continue model without recompling",
+        action="store_const",
+        const=True,
+        default=False,
+    )
+    parser.add_argument(
         "--nocache",
         help="Don't cache dataset",
+        action="store_const",
+        const=True,
+        default=False,
+    )
+
+    parser.add_argument(
+        "--notf32",
+        help="Don't use TensorFloat32",
         action="store_const",
         const=True,
         default=False,
@@ -228,6 +255,8 @@ if __name__ == "__main__":
         model_type=args.model,
         tier=args.tier,
         continue_model=args.continue_model,
+        no_recompile=args.no_recompile,
         attention=args.attention,
         inference=args.inference,
+        no_tf32=args.notf32,
     )

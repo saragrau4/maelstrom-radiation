@@ -14,7 +14,7 @@ from pprint import pprint
 import plotting
 
 
-def sw_inference(
+def lw_inference(
     batch_size=256,
     synthetic_data=False,
     model_path="model.h5",
@@ -38,6 +38,7 @@ def sw_inference(
         cache=False,
         minimal=False,
         tier=tier,
+        output_fields=["lw", "hr_lw"],
     )
     print("Data loaded")
     load_time = time() - total_start
@@ -71,6 +72,7 @@ def sw_inference(
         minimal=False,
         tier=tier,
         shuffle=False,
+        output_fields=["lw", "hr_lw"],
     ).take(1)
     for inputs, outputs in test_batch:
         pred = model.predict(inputs)
@@ -78,7 +80,7 @@ def sw_inference(
     plotting.plotbatch_wc(
         outputs,
         pred,
-        to_plot=["sw_dn","sw_up","hr_sw"],
+        to_plot=["lw_dn","lw_up","hr_lw"],
         save_as=f"columns_{run_no}.png",
     )
 

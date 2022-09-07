@@ -19,13 +19,14 @@ def load_data(
     shard_num=1,
     shard_idx=1,
     shuffle=True,
+    output_fields = ["sw", "hr_sw"],
 ):
 
     kwargs = {
         "hr_units": "K d-1",
         "norm": False,
         "dataset": "tripleclouds",
-        "output_fields": ["sw", "hr_sw"],
+        "output_fields": output_fields,
     }
     if minimal:
         kwargs["minimal_outputs"] = True

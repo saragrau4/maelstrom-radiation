@@ -28,7 +28,7 @@ def load_model(model_path):
     custom_objects = {
         "top_scaledflux_mse": losses.top_scaledflux_mse,
         "top_scaledflux_mae": losses.top_scaledflux_mae,
-        "rnncolumns": rnncolumns_old,
+        "rnncolumns": rnncolumns,
     }
     return tf.keras.models.load_model(model_path, custom_objects=custom_objects)
 
@@ -245,6 +245,9 @@ def build_fullcnn(
     # Merge all inputs
     all_col = Concatenate(axis=-1)([rep_sca, col_inp, second_layer[2], inter_inp])
 
+    if attention:
+        print("Not using dilation with attention")
+        dilation_rates = [1 for i in dilation_rates]
     for drate in dilation_rates:
         all_col = Conv1D(
             filters=conv_filters,
