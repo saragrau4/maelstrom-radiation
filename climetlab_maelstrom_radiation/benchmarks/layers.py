@@ -233,3 +233,20 @@ class HRLayer(tf.keras.layers.Layer):
         flux_diff = netflux[..., 1:] - netflux[..., :-1]
         net_press = hlpress[..., 1:, 0] - hlpress[..., :-1, 0]
         return -self.g_cp * tf.math.divide(flux_diff, net_press)
+
+@tf.keras.utils.register_keras_serializable()
+class AddHeight(tf.keras.layers.Layer):
+    def __init__(self, name=None,shape=(1,138,1),trainable=True,dtype=None):
+        super(AddHeight, self).__init__(name=name,trainable=trainable,dtype=dtype)
+        self.shape = shape
+
+    def build(self, input_shape):
+        self.b = self.add_weight(shape=self.shape,
+                                 initializer='random_normal',
+                                 trainable=True)
+    def get_config(self):
+        cfg = super().get_config()
+        return cfg
+
+    def call(self, inputs):
+        return inputs + self.b

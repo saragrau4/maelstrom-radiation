@@ -8,10 +8,11 @@ import tensorflow as tf
 tf.config.experimental.enable_tensor_float_32_execution(False)
 from tensorflow.keras.optimizers import Adam
 
-from data import load_data
-from models import load_model
 from pprint import pprint
-import plotting
+
+from .data import load_data
+from .models import load_model
+from .plotting import plotbatch_wc
 
 
 def sw_inference(
@@ -75,7 +76,7 @@ def sw_inference(
     for inputs, outputs in test_batch:
         pred = model.predict(inputs)
 
-    plotting.plotbatch_wc(
+    plotbatch_wc(
         outputs,
         pred,
         to_plot=["sw_dn","sw_up","hr_sw"],
@@ -83,7 +84,7 @@ def sw_inference(
     )
 
 
-if __name__ == "__main__":
+def sw_inference_wrapper():
     import argparse
 
     parser = argparse.ArgumentParser(description="Run benchmark")
@@ -124,3 +125,6 @@ if __name__ == "__main__":
         tier=args.tier,
         no_stats = args.no_stats
     )
+    
+if __name__ == "__main__":
+    sw_inference_wrapper()

@@ -7,10 +7,10 @@ from time import time
 import tensorflow as tf
 from tensorflow.keras.optimizers import Adam
 
-from utils import EpochTimingCallback, printstats  # TimingCallback,
-from data import load_train_val_data
-from models import build_cnn, build_fullcnn, build_rnn, load_model
-import losses
+from .utils import EpochTimingCallback, printstats  # TimingCallback,
+from .data import load_train_val_data
+from .models import build_cnn, build_fullcnn, build_rnn, load_model
+from climetlab_maelstrom_radiation.benchmarks import losses
 import horovod.keras as hvd
 
 # import mlflow.tensorflow
@@ -163,7 +163,7 @@ def main(
 
     # If rank 1, run inference
     if hvd.rank() == 0 and inference:
-        from benchmarks_sw_inference import sw_inference
+        from .benchmarks_sw_inference import sw_inference
 
         sw_inference(
             model_path=f"{model_type}_{run_no}.h5",
@@ -174,7 +174,7 @@ def main(
             minimal=minimal,
         )
     total_time = time() - total_start
-    printstats(logfile, total_time, train_time, load_time, save_time, batch_size)
+    printstats(logfile, total_time, train_time, load_time, 0.0, batch_size)
 
 
 if __name__ == "__main__":

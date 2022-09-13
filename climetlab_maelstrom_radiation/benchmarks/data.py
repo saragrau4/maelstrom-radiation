@@ -1,9 +1,11 @@
 import numpy as np
 import climetlab as cml
+import os
 
 cml.settings.set("check-out-of-date-urls", False)
 
-norms = np.load("inp_max_norm.npy", allow_pickle=True)
+drn = os.path.dirname(__file__)
+norms = np.load(f"{drn}/inp_max_norm.npy", allow_pickle=True)
 norms = norms[()]
 for key in norms:
     norms[key][norms[key] == 0] = 1

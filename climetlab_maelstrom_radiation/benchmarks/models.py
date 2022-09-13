@@ -1,5 +1,5 @@
 import numpy as np
-from data import norms
+from .data import norms
 import tensorflow as tf
 from tensorflow import nn
 from tensorflow.keras.layers import (
@@ -17,8 +17,8 @@ from tensorflow.keras.layers import (
     GRU,
 )
 from tensorflow.keras.models import Model
-from layers import TopFlux, rnncolumns, HRLayer, rnncolumns_old
-import losses
+from .layers import TopFlux, rnncolumns, HRLayer, rnncolumns_old, AddHeight
+from .losses import top_scaledflux_mse, top_scaledflux_mae
 
 activations = {'swish' : nn.swish,
                'tanh' : nn.tanh,
@@ -26,9 +26,10 @@ activations = {'swish' : nn.swish,
 
 def load_model(model_path):
     custom_objects = {
-        "top_scaledflux_mse": losses.top_scaledflux_mse,
-        "top_scaledflux_mae": losses.top_scaledflux_mae,
+        "top_scaledflux_mse": top_scaledflux_mse,
+        "top_scaledflux_mae": top_scaledflux_mae,
         "rnncolumns": rnncolumns,
+        "AddHeight": AddHeight,
     }
     return tf.keras.models.load_model(model_path, custom_objects=custom_objects)
 
