@@ -78,7 +78,7 @@ class radiation(Dataset):
     @normalize("hr_units", ["K s-1", "K d-1"], multiple=False)
     def __init__(
         self,
-        dataset="mcica",
+        dataset="tripleclouds",
         date="20200101",
         timestep=0,
         subset=None,

@@ -51,7 +51,11 @@ setuptools.setup(
         "climetlab.datasets": [
             "maelstrom-radiation = climetlab_maelstrom_radiation.radiation:radiation",
             "maelstrom-radiation-tf = climetlab_maelstrom_radiation.radiation_tf:radiation_tf",
-        ]
+        ],
+        "console_scripts": ["radiation-benchmarks-sw = climetlab_maelstrom_radiation.benchmarks.benchmarks_sw:main",
+                            "radiation-inference-sw =  climetlab_maelstrom_radiation.benchmarks.benchmarks_sw_inference",
+                            "radiation-inference-lw =  climetlab_maelstrom_radiation.benchmarks.benchmarks_lw_inference:lw_inference_wrapper",
+        ],
     },
     keywords="meteorology",
     classifiers=[

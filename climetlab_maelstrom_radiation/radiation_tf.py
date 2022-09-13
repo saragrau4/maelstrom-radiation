@@ -43,20 +43,36 @@ features_size = {
 }
 
 timestep_subset = {
-    "tier-1": 0,
+    "tier-1": [0],
+    "tier-1-val": [2019013100],
+    "tier-1-test": [2019053100],
     "2020": list(range(0, 3501, 125)),
-    "2019013100": 2019013100,
-    "2019053100": 2019053100,
-    "2019082900": 2019082900,
-    "2019102800": 2019102800,
+    "2019013100": [2019013100],
+    "2019053100": [2019053100],
+    "2019082900": [2019082900],
+    "2019102800": [2019102800],
+    "tier-2": list(range(0, 3501, 125)),
+    "tier-2-val": [2019013100, 2019082900],
+    "tier-2-test": [2019053100, 2019102800],
+    "tier-3": list(range(0, 3501, 1000)),
+    "tier-3-val": [2019013100, 2019082900],
+    "tier-3-test": [2019053100, 2019102800],
 }
 filenum_subset = {
-    "tier-1": 0,
+    "tier-1": [0],
+    "tier-1-val": [0],
+    "tier-1-test": [0],
     "2020": list(range(52)),
     "2019013100": list(range(116)),
     "2019053100": list(range(116)),
     "2019082900": list(range(116)),
     "2019102800": list(range(116)),
+    "tier-2": list(range(0,52,5)),
+    "tier-2-val": [0, 25, 50],
+    "tier-2-test": [0, 25, 50],
+    "tier-3": list(range(0,52,5)),
+    "tier-3-val": [0, 25, 50],
+    "tier-3-test": [0, 25, 50],
 }
 _num_norm = 0
 
@@ -110,9 +126,9 @@ class radiation_tf(Dataset):
     )
     def __init__(
         self,
-        dataset="mcica",
+        dataset="tripleclouds",
         subset=None,
-        timestep=0,
+        timestep=[0],
         filenum=[0],
         input_fields=[
             "sca_inputs",
@@ -133,11 +149,19 @@ class radiation_tf(Dataset):
     ):
         self.valid_subset = [
             "tier-1",
+            "tier-1-val",
+            "tier-1-test",
             "2020",
             "2019013100",
             "2019053100",
             "2019082900",
             "2019102800",
+            "tier-2",
+            "tier-2-val",
+            "tier-2-test",
+            "tier-3",
+            "tier-3-val",
+            "tier-3-test",
         ]
         self.valid_timestep = list(range(0, 3501, 125)) + [
             2019013100,
@@ -217,6 +241,8 @@ class radiation_tf(Dataset):
         else:
             self.input_means, self.input_stds = self.load_norms()
             self.normfunc = self.normalise
+
+        self.numcolumns = 67840 * len(self.timestep) * len(self.filenum)
 
     def dataset_setup(self):
         global HEADURL
@@ -326,6 +352,9 @@ class radiation_tf(Dataset):
             else:
                 outputs[k] = example[k]
         return self.sparsefunc(*self.normfunc(inputs, outputs))
+    
+    def _parse_batch_minimal(self, record_batch):
+        return tf.io.parse_example(record_batch, feature_description)
 
     def to_tfdataset(
         self,
@@ -335,11 +364,30 @@ class radiation_tf(Dataset):
         repeat=False,
         equal_csza=False,
         dark_side=True,
+        shard_num: int = 1,
+        shard_idx: int = 1,
+        parallel_reads = AUTOTUNE,
+        prefetch_size = AUTOTUNE,
+        buffer_size = None,
+        cache = False,
     ):
-        ds = self.source.to_tfdataset(num_parallel_reads=AUTOTUNE)
 
-        if shuffle:
-            ds = ds.shuffle(shuffle_size)
+        if True:
+            paths = [source.path for source in self.source.sources]
+            files_ds = tf.data.Dataset.list_files(paths)
+            options = tf.data.Options()
+            options.experimental_deterministic = False
+            files_ds = files_ds.with_options(options)
+            ds = tf.data.TFRecordDataset(
+                files_ds,
+                num_parallel_reads=parallel_reads,
+                buffer_size = buffer_size,
+            )
+        else:
+            ds = self.source.to_tfdataset(num_parallel_reads=parallel_reads)
+
+        if shard_num > 1:
+            ds = ds.shard(shard_num,shard_idx)
 
         # Parse a batch into a dataset
         if self.dataset == "mcica":
@@ -349,6 +397,15 @@ class radiation_tf(Dataset):
             ds = ds.map(lambda x: self._parse_batch_rescale(x))
         else:
             ds = ds.map(lambda x: self._parse_batch(x))
+
+        if cache:
+            ds = ds.cache()
+
+        if shuffle:
+            ds = ds.shuffle(shuffle_size)
+
+        # Prepare batches
+        ds = ds.batch(batch_size)
 
         if equal_csza:
 
@@ -373,13 +430,10 @@ class radiation_tf(Dataset):
 
             ds = ds.filter(lambda x, y: not_dark(x, y))
 
-        # Prepare batches
-        ds = ds.batch(batch_size)
-
         if repeat:
             ds = ds.repeat()
 
-        return ds.prefetch(buffer_size=AUTOTUNE)
+        return ds.prefetch(buffer_size=prefetch_size)
 
     def load_norms(self, dataset=None):
         global HEADURL, NORM_PATTERN
