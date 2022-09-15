@@ -24,7 +24,7 @@ from climetlab.utils.patterns import Pattern
 
 tf.data.Options.deterministic = False
 AUTOTUNE = tf.data.experimental.AUTOTUNE
-__version__ = "0.6.1"
+__version__ = "0.6.2"
 
 HEADURL = "https://storage.ecmwf.europeanweather.cloud/MAELSTROM_AP3"
 
@@ -490,7 +490,7 @@ class NormMerger:
             data_vars="minimal",
             preprocess=preprocess_norm,
             compat="override",
-            parallel=True,
+            # parallel=True,
             **self.options,
         )
 

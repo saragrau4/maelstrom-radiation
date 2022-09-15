@@ -16,7 +16,7 @@ import xarray as xr
 from climetlab import Dataset
 from climetlab.decorators import normalize
 
-__version__ = "0.6.1"
+__version__ = "0.6.2"
 
 URL = "https://storage.ecmwf.europeanweather.cloud"
 PATTERN = "{url}/MAELSTROM_AP3/{inout}_{date}00_{timestep}c{patch}.nc"
@@ -325,7 +325,7 @@ class Merger:
             data_vars="minimal",
             preprocess=broadcast_irradiance,
             compat="override",
-            parallel=True,
+            # parallel=True,
             **self.options,
         )
 
