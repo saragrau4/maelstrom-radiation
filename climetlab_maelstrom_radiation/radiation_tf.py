@@ -24,7 +24,7 @@ from climetlab.utils.patterns import Pattern
 
 tf.data.Options.deterministic = False
 AUTOTUNE = tf.data.experimental.AUTOTUNE
-__version__ = "0.5.4"
+__version__ = "0.6.1"
 
 HEADURL = "https://storage.ecmwf.europeanweather.cloud/MAELSTROM_AP3"
 
@@ -144,7 +144,7 @@ class radiation_tf(Dataset):
         norm=None,
         path=None,
         nonormsolar=False,
-        hr_units="K s-1",
+        hr_units="K d-1",
         shuffle_files=True,
     ):
         self.valid_subset = [

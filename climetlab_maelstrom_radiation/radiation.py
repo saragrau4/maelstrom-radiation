@@ -16,7 +16,7 @@ import xarray as xr
 from climetlab import Dataset
 from climetlab.decorators import normalize
 
-__version__ = "0.5.4"
+__version__ = "0.6.1"
 
 URL = "https://storage.ecmwf.europeanweather.cloud"
 PATTERN = "{url}/MAELSTROM_AP3/{inout}_{date}00_{timestep}c{patch}.nc"
@@ -87,7 +87,7 @@ class radiation(Dataset):
         all_outputs=False,
         patch=list(range(0, 16, 2)),
         heating_rate=True,
-        hr_units="K s-1",
+        hr_units="K d-1",
         topnetflux=False,
         gather_fluxes=False,
     ):
