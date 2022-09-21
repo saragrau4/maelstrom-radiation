@@ -1,0 +1,2 @@
+include notebooks/inp_max_norm.npy
+include climetlab_maelstrom_radiation/benchmarks/inp_max_norm.npy

@@ -1,3 +1,13 @@
+#!/usr/bin/env python
+# (C) Copyright 2021 ECMWF.
+#
+# This software is licensed under the terms of the Apache Licence Version 2.0
+# which can be obtained at http://www.apache.org/licenses/LICENSE-2.0.
+# In applying this licence, ECMWF does not waive the privileges and immunities
+# granted to it by virtue of its status as an intergovernmental organisation
+# nor does it submit to any jurisdiction.
+#
+
 import numpy as np
 from .data import norms
 import tensorflow as tf
@@ -231,10 +241,6 @@ def build_fullcnn(
     hl_p = all_inp[-1]
     first_layer = all_inp
 
-    norms = np.load("inp_max_norm.npy", allow_pickle=True)
-    norms = norms[()]
-    for key in norms:
-        norms[key][norms[key] == 0] = 1
     second_layer = []
     for i, k in enumerate(inp_shape.keys()):
         second_layer.append(first_layer[i] / tf.constant(norms[k]))

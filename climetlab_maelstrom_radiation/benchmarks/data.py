@@ -1,3 +1,13 @@
+#!/usr/bin/env python
+# (C) Copyright 2021 ECMWF.
+#
+# This software is licensed under the terms of the Apache Licence Version 2.0
+# which can be obtained at http://www.apache.org/licenses/LICENSE-2.0.
+# In applying this licence, ECMWF does not waive the privileges and immunities
+# granted to it by virtue of its status as an intergovernmental organisation
+# nor does it submit to any jurisdiction.
+#
+
 import numpy as np
 import climetlab as cml
 import os
@@ -44,7 +54,7 @@ def load_data(
 
     tiername = f"tier-{tier}"
     assert mode in ["train","val","test"], f"{mode} not train/val/test"
-    
+
     if mode in ["val","test"]:
         tiername = tiername + f"-{mode}"
 
