@@ -13,6 +13,7 @@ from time import time
 # To hide GPU uncomment
 # import os
 # os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+import mantik
 
 import tensorflow as tf
 from tensorflow.keras.optimizers import Adam
@@ -22,8 +23,8 @@ from .data import load_train_val_data
 from .models import build_cnn, build_fullcnn, build_rnn, load_model
 from climetlab_maelstrom_radiation.benchmarks import losses
 import horovod.keras as hvd
-
-# import mlflow.tensorflow
+from deep500.utils import timer_tf as timer
+import mlflow
 
 
 def main(
@@ -41,6 +42,9 @@ def main(
     inference=False,
     no_tf32=False,
 ):
+
+    # mantik.init_tracking()
+    # mlflow.tensorflow.autolog()
 
     # Horovod: initialize Horovod.
     hvd.init()
@@ -115,14 +119,14 @@ def main(
     if not no_recompile:
         # Horovod: add Horovod Distributed Optimizer.
         opt = Adam(lr * batch_size / 256 * hvd.size())
-        opt = hvd.DistributedOptimizer(opt)
+        # opt = hvd.DistributedOptimizer(opt)
 
         model.compile(
             loss=loss,
             metrics={"hr_sw": ["mse", "mae"], "sw": ["mse", "mae"]},
             loss_weights=weights,
             optimizer=opt,
-            experimental_run_tf_function=False,
+            # experimental_run_tf_function=False,
         )
     else:
         assert len(continue_model) > 0, "Cannot use no_recompile without continue_model"
@@ -132,45 +136,49 @@ def main(
 
     logfile = f"training_{model_type}_{run_no}.log"
     callbacks = [
-        hvd.callbacks.BroadcastGlobalVariablesCallback(0),
-        hvd.callbacks.MetricAverageCallback(),
-        tf.keras.callbacks.ReduceLROnPlateau(
-            monitor="val_loss", factor=0.25, patience=4, verbose=1, min_lr=10 ** (-6)
-        ),
-        tf.keras.callbacks.EarlyStopping(
-            monitor="val_loss",
-            min_delta=0,
-            patience=6,
-            verbose=2,
-            mode="auto",
-            restore_best_weights=True,
-        ),
+        # hvd.callbacks.BroadcastGlobalVariablesCallback(0),
+        # hvd.callbacks.MetricAverageCallback(),
+        # tf.keras.callbacks.ReduceLROnPlateau(
+        #     monitor="val_loss", factor=0.25, patience=4, verbose=1, min_lr=10 ** (-6)
+        # ),
+        # tf.keras.callbacks.EarlyStopping(
+        #     monitor="val_loss",
+        #     min_delta=0,
+        #     patience=6,
+        #     verbose=2,
+        #     mode="auto",
+        #     restore_best_weights=True,
+        # ),
     ]
     if hvd.rank() == 0:
-        callbacks.append(EpochTimingCallback())
-        callbacks.append(tf.keras.callbacks.CSVLogger(logfile))
-        callbacks.append(
-            tf.keras.callbacks.ModelCheckpoint(
-                f"./{model_type}_{run_no}_" + "{epoch}.h5",
-            )
-        )
-        callbacks.append(
-            tf.keras.callbacks.ModelCheckpoint(
-                f"./{model_type}_{run_no}.h5",
-                save_best_only=True,
-            )
-        )
+        # callbacks.append(EpochTimingCallback())
+        # callbacks.append(tf.keras.callbacks.CSVLogger(logfile))
+        # callbacks.append(
+        #     tf.keras.callbacks.ModelCheckpoint(
+        #         f"./{model_type}_{run_no}_" + "{epoch}.h5",
+        #     )
+        # )
+        # callbacks.append(
+        #     tf.keras.callbacks.ModelCheckpoint(
+        #         f"./{model_type}_{run_no}.h5",
+        #         save_best_only=True,
+        #     )
+        # )
+        pass
+    tmr = timer.CPUGPUTimer()
+    callbacks.append(timer.TimerCallback(tmr, gpu=False))
 
-    train_start = time()
+    # train_start = time()
     _ = model.fit(
         train,
-        validation_data=val,
+        # validation_data=val,
         epochs=epochs,
         verbose=2 if hvd.rank() == 0 else 0,
         callbacks=callbacks,
     )
-    train_time = time() - train_start
-
+    # train_time = time() - train_start
+    tmr.print_all_time_stats()
+    
     # If rank 1, run inference
     if hvd.rank() == 0 and inference:
         from .benchmarks_sw_inference import sw_inference
@@ -183,11 +191,11 @@ def main(
             run_no=run_no,
             minimal=minimal,
         )
-    total_time = time() - total_start
-    printstats(logfile, total_time, train_time, load_time, 0.0, batch_size)
+        
+    # total_time = time() - total_start
+    # printstats(logfile, total_time, train_time, load_time, 0.0, batch_size)
 
-
-if __name__ == "__main__":
+def benchmarks_sw_wrapper():
     import argparse
 
     parser = argparse.ArgumentParser(description="Run benchmark")
@@ -270,3 +278,6 @@ if __name__ == "__main__":
         inference=args.inference,
         no_tf32=args.notf32,
     )
+    
+if __name__ == "__main__":
+    benchmarks_sw_wrapper()
