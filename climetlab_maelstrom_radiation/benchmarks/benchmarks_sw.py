@@ -21,7 +21,13 @@ from .utils import EpochTimingCallback, printstats  # TimingCallback,
 from .data import load_train_val_data
 from .models import build_cnn, build_fullcnn, build_rnn, load_model
 from climetlab_maelstrom_radiation.benchmarks import losses
-import horovod.keras as hvd
+try:
+    import horovod.keras as hvd
+    print("Horovod found")
+    have_hvd=True
+except:
+    print("No Horovod")
+    have_hvd=False
 
 # import mlflow.tensorflow
 
@@ -43,7 +49,8 @@ def main(
 ):
 
     # Horovod: initialize Horovod.
-    hvd.init()
+    if have_hvd:
+        hvd.init()
 
     if model_type == "min_cnn":
         minimal = True
@@ -58,7 +65,9 @@ def main(
     for gpu in gpus:
         tf.config.experimental.set_memory_growth(gpu, True)
     if gpus:
-        tf.config.experimental.set_visible_devices(gpus[hvd.local_rank()], "GPU")
+        gpu_local_rank = hvd.local_rank() if have_hvd else 0
+        gpu_rank = hvd.rank() if have_hvd else 0
+        tf.config.experimental.set_visible_devices(gpus[gpu_local_rank], "GPU")
 
     print("Getting training/validation data")
     total_start = time()
@@ -68,8 +77,8 @@ def main(
         cache=cache,
         minimal=minimal,
         tier=tier,
-        shard_num=hvd.size(),
-        shard_idx=hvd.local_rank(),
+        shard_num=hvd.size() if have_hvd else 1,
+        shard_idx=gpu_rank,
     )
     print("Data loaded")
     load_time = time() - total_start
@@ -94,8 +103,9 @@ def main(
         loss = {"hr_sw": "mae", "sw": losses.top_scaledflux_mae}
         weights = {"hr_sw": 10 ** (-1), "sw": 1}
         lr = 0.5 * 10 ** (-3)
-        if hvd.size() == 4:
-            lr = lr / 2
+        if have_hvd:
+            if hvd.size() == 4:
+                lr = lr / 2
     elif model_type == "cnn":
         model = build_fullcnn(
             train.element_spec[0],
@@ -114,8 +124,11 @@ def main(
 
     if not no_recompile:
         # Horovod: add Horovod Distributed Optimizer.
-        opt = Adam(lr * batch_size / 256 * hvd.size())
-        opt = hvd.DistributedOptimizer(opt)
+        n_gpu = hvd.size() if have_hvd else 1
+        true_lr = lr * batch_size / 256 * n_gpu
+        opt = Adam(true_lr)
+        if have_hvd:
+            opt = hvd.DistributedOptimizer(opt)
 
         model.compile(
             loss=loss,
@@ -126,14 +139,13 @@ def main(
         )
     else:
         assert len(continue_model) > 0, "Cannot use no_recompile without continue_model"
-        assert hvd.size() == 1, "Not tested restarting with > 0 GPU"
+        if have_hvd:
+            assert hvd.size() == 1, "Not tested restarting with > 0 GPU"
 
     model.summary()
 
     logfile = f"training_{model_type}_{run_no}.log"
     callbacks = [
-        hvd.callbacks.BroadcastGlobalVariablesCallback(0),
-        hvd.callbacks.MetricAverageCallback(),
         tf.keras.callbacks.ReduceLROnPlateau(
             monitor="val_loss", factor=0.25, patience=4, verbose=1, min_lr=10 ** (-6)
         ),
@@ -146,7 +158,11 @@ def main(
             restore_best_weights=True,
         ),
     ]
-    if hvd.rank() == 0:
+    if have_hvd:
+        callbacks.append(hvd.callbacks.BroadcastGlobalVariablesCallback(0))
+        callbacks.append(hvd.callbacks.MetricAverageCallback())
+
+    if (gpu_rank == 0):
         callbacks.append(EpochTimingCallback())
         callbacks.append(tf.keras.callbacks.CSVLogger(logfile))
         callbacks.append(
@@ -166,13 +182,13 @@ def main(
         train,
         validation_data=val,
         epochs=epochs,
-        verbose=2 if hvd.rank() == 0 else 0,
+        verbose=2 if gpu_rank == 0 else 0,
         callbacks=callbacks,
     )
     train_time = time() - train_start
 
     # If rank 1, run inference
-    if hvd.rank() == 0 and inference:
+    if gpu_rank == 0 and inference:
         from .benchmarks_sw_inference import sw_inference
 
         sw_inference(

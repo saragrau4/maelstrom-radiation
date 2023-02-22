@@ -86,3 +86,10 @@ def load_train_val_data(
     train = load_data(mode="train",shuffle=True, **kwargs)
     val = load_data(mode="val", shuffle=False, **kwargs)
     return train, val
+
+def build_mirror(dirname,**kwargs):
+    from climetlab.mirrors.directory_mirror import DirectoryMirror
+    mirror = DirectoryMirror(path=dirname)
+    with mirror.prefetch():
+        load_train_val_data(**kwargs)
+        
