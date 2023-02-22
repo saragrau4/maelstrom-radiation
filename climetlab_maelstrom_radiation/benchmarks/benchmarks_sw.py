@@ -13,8 +13,9 @@ from time import time
 # To hide GPU uncomment
 # import os
 # os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+# import mantik
 
-import tensorflow as tf
+import tensorflow as tf         # 
 from tensorflow.keras.optimizers import Adam
 
 from .utils import EpochTimingCallback, printstats  # TimingCallback,
@@ -29,7 +30,8 @@ except:
     print("No Horovod")
     have_hvd=False
 
-# import mlflow.tensorflow
+from deep500.utils import timer_tf as timer
+# import mlflow
 
 
 def main(
@@ -47,6 +49,9 @@ def main(
     inference=False,
     no_tf32=False,
 ):
+
+    # mantik.init_tracking()
+    # mlflow.tensorflow.autolog()
 
     # Horovod: initialize Horovod.
     if have_hvd:
@@ -135,7 +140,7 @@ def main(
             metrics={"hr_sw": ["mse", "mae"], "sw": ["mse", "mae"]},
             loss_weights=weights,
             optimizer=opt,
-            experimental_run_tf_function=False,
+            # experimental_run_tf_function=False,
         )
     else:
         assert len(continue_model) > 0, "Cannot use no_recompile without continue_model"
@@ -176,8 +181,11 @@ def main(
                 save_best_only=True,
             )
         )
+        tmr = timer.CPUGPUTimer()
+        callbacks.append(timer.TimerCallback(tmr, gpu=False))
 
-    train_start = time()
+
+    # train_start = time()
     _ = model.fit(
         train,
         validation_data=val,
@@ -185,8 +193,9 @@ def main(
         verbose=2 if gpu_rank == 0 else 0,
         callbacks=callbacks,
     )
-    train_time = time() - train_start
-
+    # train_time = time() - train_start
+    tmr.print_all_time_stats()
+    
     # If rank 1, run inference
     if gpu_rank == 0 and inference:
         from .benchmarks_sw_inference import sw_inference
@@ -199,11 +208,11 @@ def main(
             run_no=run_no,
             minimal=minimal,
         )
-    total_time = time() - total_start
-    printstats(logfile, total_time, train_time, load_time, 0.0, batch_size)
+        
+    # total_time = time() - total_start
+    # printstats(logfile, total_time, train_time, load_time, 0.0, batch_size)
 
-
-if __name__ == "__main__":
+def benchmarks_sw_wrapper():
     import argparse
 
     parser = argparse.ArgumentParser(description="Run benchmark")
@@ -286,3 +295,6 @@ if __name__ == "__main__":
         inference=args.inference,
         no_tf32=args.notf32,
     )
+    
+if __name__ == "__main__":
+    benchmarks_sw_wrapper()

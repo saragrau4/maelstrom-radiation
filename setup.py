@@ -52,7 +52,7 @@ setuptools.setup(
             "maelstrom-radiation = climetlab_maelstrom_radiation.radiation:radiation",
             "maelstrom-radiation-tf = climetlab_maelstrom_radiation.radiation_tf:radiation_tf",
         ],
-        "console_scripts": ["radiation-benchmarks-sw = climetlab_maelstrom_radiation.benchmarks.benchmarks_sw:main",
+        "console_scripts": ["radiation-benchmarks-sw = climetlab_maelstrom_radiation.benchmarks.benchmarks_sw:benchmarks_sw_wrapper",
                             "radiation-inference-sw =  climetlab_maelstrom_radiation.benchmarks.benchmarks_sw_inference:sw_inference_wrapper",
                             "radiation-inference-lw =  climetlab_maelstrom_radiation.benchmarks.benchmarks_lw_inference:lw_inference_wrapper",
         ],
