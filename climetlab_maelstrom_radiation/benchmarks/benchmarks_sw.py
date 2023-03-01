@@ -30,7 +30,7 @@ except:
     print("No Horovod")
     have_hvd=False
 
-from deep500.utils import timer_tf as timer
+# from deep500.utils import timer_tf as timer
 # import mlflow
 
 
@@ -48,6 +48,7 @@ def main(
     attention=False,
     inference=False,
     no_tf32=False,
+    dl_test=False,
 ):
 
     # mantik.init_tracking()
@@ -96,6 +97,7 @@ def main(
         model = build_cnn(
             train.element_spec[0],
             train.element_spec[1],
+            dl_test=dl_test
         )
         loss = {"hr_sw": "mse", "sw": "mse"}
         weights = {"hr_sw": 10 ** (3), "sw": 1}
@@ -104,6 +106,7 @@ def main(
         model = build_rnn(
             train.element_spec[0],
             train.element_spec[1],
+            dl_test=dl_test
         )
         loss = {"hr_sw": "mae", "sw": losses.top_scaledflux_mae}
         weights = {"hr_sw": 10 ** (-1), "sw": 1}
@@ -116,6 +119,7 @@ def main(
             train.element_spec[0],
             train.element_spec[1],
             attention=attention,
+            dl_test=dl_test
         )
         loss = {"hr_sw": "mae", "sw": losses.top_scaledflux_mae}
         weights = {"hr_sw": 10 ** (-1), "sw": 1}
@@ -181,8 +185,8 @@ def main(
                 save_best_only=True,
             )
         )
-        tmr = timer.CPUGPUTimer()
-        callbacks.append(timer.TimerCallback(tmr, gpu=False))
+        # tmr = timer.CPUGPUTimer()
+        # callbacks.append(timer.TimerCallback(tmr, gpu=False))
 
 
     # train_start = time()
@@ -194,7 +198,7 @@ def main(
         callbacks=callbacks,
     )
     # train_time = time() - train_start
-    tmr.print_all_time_stats()
+    # tmr.print_all_time_stats()
     
     # If rank 1, run inference
     if gpu_rank == 0 and inference:
@@ -277,6 +281,14 @@ def benchmarks_sw_wrapper():
         default=False,
     )
 
+    parser.add_argument(
+        "--dl_test",
+        help="Test dataloader",
+        action="store_const",
+        const=True,
+        default=False,
+    )
+
     parser.add_argument("--runno", type=int)
 
     args = parser.parse_args()
@@ -294,6 +306,7 @@ def benchmarks_sw_wrapper():
         attention=args.attention,
         inference=args.inference,
         no_tf32=args.notf32,
+        dl_test=args.dl_test
     )
     
 if __name__ == "__main__":
