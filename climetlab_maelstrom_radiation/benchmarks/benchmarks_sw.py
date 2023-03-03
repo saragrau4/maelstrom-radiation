@@ -53,7 +53,7 @@ def main(
 
     # mantik.init_tracking()
     # mlflow.tensorflow.autolog()
-    print(f"   JODID is : {run_no}")
+    print(f"   JOBID is : {run_no}")
     # Horovod: initialize Horovod.
     if have_hvd:
         hvd.init()

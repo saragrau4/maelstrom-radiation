@@ -13,7 +13,7 @@ parameterset:
         _: 3
       - name: mconfig
         type : str
-        _: "--dl_test --nocache" #, , --nocache" # "--dl_test"|"--nocache"|""
+        _: "--nocache, ,--dl_test --nocache" 
   - name: globalParameter
     parameter:
       - name: modules
@@ -130,7 +130,7 @@ patternset:
       - {name: epoch_time, type: int, _: "-\\s+${jube_pat_int}s\\s+-"}
       - {name: loss, type: float, _: "loss:\\s+$jube_pat_fp"}
       - {name: val_loss, type: float, _: "val_loss:\\s+$jube_pat_fp"}
-      - {name: jobid, type: int, _: "JODID is :\\$jube_pat_int" }
+      - {name: jobid, type: int, _: "JOBID is : ${jube_pat_int}" }
       - {name: training_time, type: float, _: "Total training time: ${jube_pat_fp} s"}
       - {name: total_time, type: float, _: "Total runtime: ${jube_pat_fp} s"}
       - {name: cpu_mem, type: float, _: "Final CPU memory:.*peak: $jube_pat_fp GB"}
