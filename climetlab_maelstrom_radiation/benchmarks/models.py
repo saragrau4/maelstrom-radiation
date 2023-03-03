@@ -136,7 +136,7 @@ def build_cnn(
         from .dummy_model import DummyModel as Model
     else:
         from tensorflow.keras import Model
-        
+
     model = Model(inputs, output)
     return model
 
@@ -153,30 +153,31 @@ def build_rnn(
 ):
     #Assume inputs have the order
     #scalar, column, hl, inter, pressure_hl
-    kw = 5 
+    kw = 5
     all_inp = []
     for k in inp_spec.keys():
         all_inp.append(Input(inp_spec[k].shape[1:],name=k))
-    
+
     scalar_inp = all_inp[0]
     lay_inp = all_inp[1]
     hl_inp = all_inp[2]
     inter_inp = all_inp[3]
     hl_p = all_inp[-1]
-    
-    # inputs we need: 
+
+    # inputs we need:
     #  - layer inputs ("lay_inp"), which are the main RNN sequential input
     #     -- includes repeated mu0, t_lay, and log(p_lay)
     #  - albedos, fed to a dense layer whose output is concatenated with the initial
     #             RNN output sequence (137) to get to half-level outputs (138)
-    
+
     # extract scalar variables we need
     cos_sza = scalar_inp[:,1]
     albedos = scalar_inp[:,2:14]
     solar_irrad = scalar_inp[:,-1]   # not needed as input when predicting scaled flux
-    
+
     overlap_param = ZeroPadding1D(padding=(1,1))(inter_inp)
 
+    # lay_inp = rnncolumns(colnorms=xcoeffs,name='procCol')(lay_inp,hl_inp,cos_sza)
     lay_inp = rnncolumns(name='procCol')([lay_inp,hl_inp,cos_sza])
 
     # 2. OUTPUTS
@@ -186,41 +187,49 @@ def build_rnn(
     incflux = Multiply()([cos_sza, solar_irrad])
     incflux = tf.expand_dims(tf.expand_dims(incflux,axis=1),axis=2)
 
-    mlp_surface_outp = Dense(nneur, activation=activ0,name='dense_surface')(albedos)
+    # hidden0,last_state = layers.SimpleRNN(nneur,return_sequences=True,return_state=True)(inputs)
+    if lstm:
+        rnnlayer = LSTM
+        hidden0,last_state,last_memory = rnnlayer(nneur,return_sequences=True,
+                                      return_state=True,name="RNN1")(lay_inp)
+        last_state = tf.concat([last_state,last_memory],axis=-1)
+    else:
+        rnnlayer = GRU
+        hidden0,last_state = rnnlayer(nneur,return_sequences=True,
+                                      return_state=True,name="RNN1")(lay_inp)
+
+    last_state_plus_albedo =  tf.concat([last_state,albedos],axis=1)
+
+    mlp_surface_outp = Dense(nneur, activation=activ0,name='dense_surface')(last_state_plus_albedo)
+
+    hidden0_lev = tf.concat([hidden0,tf.reshape(mlp_surface_outp,[-1,1,nneur])],axis=1)
 
     # !! OVERLAP PARAMETER !! added here as an additional feature to the whole sequence
-    hidden0_lev = tf.concat([lay_inp, overlap_param[:,1:,:]],axis=2)
+    hidden0_lev = tf.concat([hidden0_lev, overlap_param],axis=2)
 
     if lstm:
-        mlp_surface_outp2 = Dense(nneur, activation=activ0,name='dense_surface2')(albedos)
+        mlp_surface_outp2 = Dense(nneur, activation=activ0,name='dense_surface2')(last_state_plus_albedo)
         init_state = [mlp_surface_outp,mlp_surface_outp2]
-        rnnlayer = LSTM
     else:
         init_state = mlp_surface_outp
-        rnnlayer = GRU
     hidden1 = rnnlayer(nneur,return_sequences=True,
-                       go_backwards=True)(lay_inp, initial_state=init_state)
+                       go_backwards=True)(hidden0_lev, initial_state=init_state)
 
-    # Need to reverse the output from go_backwards
     hidden1 = tf.reverse(hidden1,axis=[1])
-    hidden1_lev = tf.concat([hidden1,tf.reshape(mlp_surface_outp,[-1,1,nneur])],axis=1)
-    hidden1_lev  = tf.concat([hidden1_lev,overlap_param],axis=2)
 
-    # at least before I had better results when concatinating hidden0 and hidden1 
-    # hidden_concat  = tf.concat([hidden0_lev,hidden1],axis=2)
+    # at least before I had better results when concatinating hidden0 and hidden1
+    hidden_concat  = tf.concat([hidden0_lev,hidden1],axis=2)
 
     # Third and final RNN layer
-    hidden2 = rnnlayer(nneur,return_sequences=True)(hidden1_lev)#,#
-    hidden2  = tf.concat([hidden1_lev,hidden2],axis=2)
-
+    hidden2 = rnnlayer(nneur,return_sequences=True)(hidden_concat)#,#
+    # flux_sw = TimeDistributed(Dense(ny, activation=activ_last))(hidden2)
     flux_sw = Conv1D(ny, kernel_size = 1, activation=activ_last,
                      name='sw_denorm'
     )(hidden2)
 
     flux_sw = Multiply(name='sw')([flux_sw, incflux])
-    
     hr_sw = HRLayer(name='hr_sw')([flux_sw, hl_p])
-     
+
     outputs = {'sw':flux_sw, 'hr_sw':hr_sw}
 
     if dl_test:
@@ -229,7 +238,6 @@ def build_rnn(
         from tensorflow.keras import Model
     model = Model(all_inp, outputs)
     return model
-
 
 def build_fullcnn(
     inp_shape,
@@ -299,7 +307,6 @@ def build_fullcnn(
         )(all_col, all_col)
 
     outputs = {}
-
     if "lw" in out_shape.keys():
         lwf = Conv1D(
             filters=2,
@@ -326,7 +333,6 @@ def build_fullcnn(
 
         if "hr_sw" in out_shape.keys():
             outputs["hr_sw"] = HRLayer(name="hr_sw")([swf, hl_p])
-
     if dl_test:
         from .dummy_model import DummyModel as Model
     else:
