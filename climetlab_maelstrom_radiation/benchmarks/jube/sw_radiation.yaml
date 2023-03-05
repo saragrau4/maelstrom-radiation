@@ -57,7 +57,7 @@ parameterset:
       - name: cml_mirror
         type: string
         tag: jwb+cscratch|jwc+cscratch
-        _: "/p/scratch/deepacf/maelstrom/maelstrom_data/climetlab_mirror/"
+        _: "/p/cscratch/deepacf/maelstrom/maelstrom_data/climetlab_mirror/"
       - name: cml_mirror
         type: string
         tag: "e4nvidia|e4amd"
