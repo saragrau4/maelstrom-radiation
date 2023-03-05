@@ -53,7 +53,7 @@ parameterset:
         _: "/p/scratch/deepacf/maelstrom/maelstrom_data/climetlab_mirror/"
       - name: cml_mirror
         type: string
-        tag: e4nvidia|e4amd
+        tag: "e4nvidia|e4amd"
         _: "/data/maelstrom/mchantry/climetlab_mirror/"
   - name: executeset
     init_with: platform.xml
@@ -89,7 +89,11 @@ parameterset:
         tag: e4amd|e4nvidia
         _: "02:00:00"
       - name: account
+        tag: jwb|jwc
         _: deepacf
+      - name: account
+        tag: e4amd|e4nvidia
+        _: maelstrom
       - name: queue
         tag: jwb+!test
         _: booster
@@ -110,6 +114,9 @@ parameterset:
         _: a-gpu-mi100
       - name: gres
         _: gpu:$n_gpu
+      - name: additional_job_config
+        tag: e4nvidia|e4amd
+        _: "#SBATCH --mem=128Gb"
       - name: executable
         _: radiation-benchmarks-sw
       - name: args_exec
@@ -153,6 +160,7 @@ result:
       style: pretty
       sort: iter_pat
       column: 
+        - {title: "Config", _: mconfig}
         - {title: "Experiment", _: 0}
         - {title: "JobID", _: jobid}
         - {title: "# nodes", _: nodes}
