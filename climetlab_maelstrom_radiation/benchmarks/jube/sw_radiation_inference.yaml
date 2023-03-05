@@ -1,5 +1,5 @@
-name:    ap3-all
-outpath: ap3_run
+name:    ap3-infer
+outpath: ap3_infer
 comment: MAELSTROM AP3 benchmark jube script
 
 parameterset:
@@ -11,13 +11,14 @@ parameterset:
       - name: tier
         type: int
         _: 3
-      - name: mconfig
+      - name: model_file
         type : str
-        _: "--nocache, ,--dl_test --nocache" 
+        tag: "jwb|jwc"
+        _: "/p/home/jusers/chantry1/juwels/maelstrom-radiation/climetlab_maelstrom_radiation/benchmarks/jube/rnn.h5" 
       - name: mconfig
         type: str
         tag: cscratch
-        _: "--nocache" 
+        _: "--nocache"
       - name: experiment
         type: int
         _: 0,1,2
@@ -125,31 +126,23 @@ parameterset:
         tag: e4nvidia|e4amd
         _: "#SBATCH --mem=128Gb"
       - name: executable
-        _: radiation-benchmarks-sw
+        _: radiation-inference-sw
       - name: args_exec
         mode: text
         _: > 
           --tier ${tier}
-          --notf32
           --batch 512
-          --epochs ${nepochs}
-          --runno $${SLURM_JOBID}
-          --model rnn
-          ${mconfig}
+          --model_path ${model_file}
 
 patternset:
    - name: perf_patterns
      pattern:
-      - {name: epoch, type: int, _: "Epoch\\s+$jube_pat_int/\\s*$jube_pat_nint"}
-      - {name: epoch_time, type: int, _: "-\\s+${jube_pat_int}s\\s+-"}
-      - {name: loss, type: float, _: "loss:\\s+$jube_pat_fp"}
-      - {name: val_loss, type: float, _: "val_loss:\\s+$jube_pat_fp"}
       - {name: jobid, type: int, _: "Submitted batch job $jube_pat_int" }
-      - {name: training_time, type: float, _: "Total training time: ${jube_pat_fp} s"}
+      - {name: load_time, type: float, _: "Total loading time: ${jube_pat_fp} s"}
+      - {name: eval_time, type: float, _: "Total evaluation time: ${jube_pat_fp} s"}
       - {name: total_time, type: float, _: "Total runtime: ${jube_pat_fp} s"}
       - {name: cpu_mem, type: float, _: "Final CPU memory:.*peak: $jube_pat_fp GB"}
       - {name: gpu_mem, type: float, _: "Final GPU memory:.*peak: $jube_pat_fp GB"}
-      - {name: batch_time_avg, type: float, _: "Average time per batch: $jube_pat_fp s"}
       - {name: performance, type: float, _: "Average performance:\\s+$jube_pat_fp GB/s"}
 
 analyser:
@@ -169,7 +162,6 @@ result:
       style: pretty
       sort: iter_pat
       column: 
-        - {title: "Config", _: mconfig}
         - {title: "Experiment", _: experiment}
         - {title: "JobID", _: jobid}
         - {title: "# nodes", _: nodes}
@@ -177,15 +169,9 @@ result:
         - {title: "num procs", _: num_procs}
         - {title: "# cpu", _: threadspertask}
         - {title: "Total runtime", _: total_time}
-        - {title: "Training time", _: training_time}
-        - {title: "avg. epoch time [s]", _: epoch_time_avg}
+        - {title: "Loading runtime", _: load_time}
+        - {title: "Evaluation time", _: eval_time}
         - {title: "performance [GB/s]", _: performance}
-        - {title: "first epoch time [s]", _: epoch_time_first}
-        - {title: "min epoch time [s]", _: epoch_time_min}
-        - {title: "max epoch time [s]", _: epoch_time_max}
-        - {title: "avg. batch time [s]", _: batch_time_avg}
-        - {title: "loss", _: loss_min}
-        - {title: "val loss", _: val_loss_min}
         - {title: "max cpu mem", _: cpu_mem}
         - {title: "max gpu mem", _: gpu_mem}
 

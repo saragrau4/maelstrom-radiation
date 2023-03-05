@@ -21,7 +21,7 @@ from pprint import pprint
 
 from .data import load_data
 from .models import load_model
-from .plotting import plotbatch_wc
+from .utils import print_gpu_usage, print_cpu_usage  # TimingCallback,
 
 
 def sw_inference(
@@ -32,6 +32,8 @@ def sw_inference(
     tier=1,
     no_stats = False,
     minimal = False,
+    plots = False,
+    n_rep = 1,
 ):
 
     gpus = tf.config.experimental.list_physical_devices("GPU")
@@ -42,11 +44,11 @@ def sw_inference(
     print("Getting training/validation data")
     total_start = time()
     test = load_data(
-        mode="test",
+        mode="val",
         batch_size=batch_size,
         synthetic_data=synthetic_data,
         cache=False,
-        minimal=False,
+        minimal=minimal,
         tier=tier,
     )
     print("Data loaded")
@@ -57,7 +59,7 @@ def sw_inference(
 
     gen_stats = (not no_stats)
     if gen_stats:
-        for i in range(2):
+        for i in range(n_rep):
             eval_start = time()
             eval = model.evaluate(
                 test,
@@ -67,30 +69,39 @@ def sw_inference(
             eval_time = time() - eval_start
             total_time = time() - total_start
             # printstats(eval)
-            results["load_time"] = load_time
-            results["eval_time"] = eval_time
-            results["total_time"] = total_time
-            pprint(results)
 
-    print("Making plots")
-    test_batch = load_data(
-        mode="test",
-        batch_size=4,
-        synthetic_data=synthetic_data,
-        cache=False,
-        minimal=False,
-        tier=tier,
-        shuffle=False,
-    ).take(1)
-    for inputs, outputs in test_batch:
-        pred = model.predict(inputs)
+        print(f"   Total runtime: {total_time:.2f} s")
+        print(f"   Total loading time: {load_time:.2f} s")
+        print(f"   Total evaluation time: {eval_time:.2f} s")
+        data_vol = [2*1.4,None,50*1.4][tier-1]
+        batches = [133*512/batch_size,None,5830*512/batch_size][tier-1]
+        print(f"   Average performance: {data_vol / eval_time :.2f} GB/s")
 
-    plotbatch_wc(
-        outputs,
-        pred,
-        to_plot=["sw_dn","sw_up","hr_sw"],
-        save_as=f"columns_{run_no}.png",
-    )
+        print_gpu_usage("   Final GPU memory: ")
+        print_cpu_usage("   Final CPU memory: ")
+
+    if plots:
+        from .plotting import plotbatch_wc
+        print("Making plots")
+        test_batch = load_data(
+            mode="test",
+            batch_size=4,
+            synthetic_data=synthetic_data,
+            cache=False,
+            minimal=False,
+            tier=tier,
+            shuffle=False,
+        ).take(1)
+        for inputs, outputs in test_batch:
+            pred = model.predict(inputs)
+
+        plotbatch_wc(
+            outputs,
+            pred,
+            to_plot=["sw_dn","sw_up","hr_sw"],
+            save_as=f"columns_{run_no}.png",
+        )
+    return
 
 
 def sw_inference_wrapper():
@@ -105,6 +116,13 @@ def sw_inference_wrapper():
         default=False,
     )
 
+    parser.add_argument(
+        "--plots",
+        help="Make plots",
+        action="store_const",
+        const=True,
+        default=False,
+    )
     parser.add_argument(
         "--no_stats",
         help="Don't calculate stats, just do plots",
@@ -132,7 +150,8 @@ def sw_inference_wrapper():
         model_path=args.model_path,
         run_no=args.runno,
         tier=args.tier,
-        no_stats = args.no_stats
+        no_stats = args.no_stats,
+        plots = args.plots,
     )
     
 if __name__ == "__main__":
