@@ -18,7 +18,7 @@ from time import time
 import tensorflow as tf         # 
 from tensorflow.keras.optimizers import Adam
 
-from .utils import EpochTimingCallback, printstats  # TimingCallback,
+from .utils import EpochTimingCallback, printstats, print_gpu_usage, print_cpu_usage  # TimingCallback,
 from .data import load_train_val_data
 from .models import build_cnn, build_fullcnn, build_rnn, load_model
 from climetlab_maelstrom_radiation.benchmarks import losses
@@ -53,7 +53,7 @@ def main(
 
     # mantik.init_tracking()
     # mlflow.tensorflow.autolog()
-
+    print(f"   JOBID is : {run_no}")
     # Horovod: initialize Horovod.
     if have_hvd:
         hvd.init()
@@ -189,7 +189,7 @@ def main(
         # callbacks.append(timer.TimerCallback(tmr, gpu=False))
 
 
-    # train_start = time()
+    train_start = time()
     _ = model.fit(
         train,
         validation_data=val,
@@ -197,7 +197,8 @@ def main(
         verbose=2 if gpu_rank == 0 else 0,
         callbacks=callbacks,
     )
-    # train_time = time() - train_start
+
+    train_time = time() - train_start
     # tmr.print_all_time_stats()
     
     # If rank 1, run inference
@@ -213,7 +214,18 @@ def main(
             minimal=minimal,
         )
         
-    # total_time = time() - total_start
+    total_time = time() - total_start
+
+    print(f"   Total runtime: {total_time:.2f} s")
+    print(f"   Total training time: {train_time:.2f} s")
+    data_vol = [2*1.4,None,50*1.4][tier-1]
+    batches = [133*512/batch_size,None,5830*512/batch_size][tier-1]
+    print(f"   Average performance: {data_vol / train_time * epochs:.2f} GB/s")
+    print(f"   Average time per batch: {total_time / batches / epochs:.2f} s")
+
+    print_gpu_usage("   Final GPU memory: ")
+    print_cpu_usage("   Final CPU memory: ")
+
     # printstats(logfile, total_time, train_time, load_time, 0.0, batch_size)
 
 def benchmarks_sw_wrapper():

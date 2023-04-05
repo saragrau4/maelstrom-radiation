@@ -1,0 +1,219 @@
+name:    ap3-all
+outpath: ap3_run
+comment: MAELSTROM AP3 benchmark jube script
+
+parameterset:
+  - name: appParameter
+    parameter:
+      - name: nepochs
+        type: int
+        _: 5
+      - name: tier
+        type: int
+        _: 3
+      - name: mconfig
+        type : str
+        _: "--nocache, ,--dl_test --nocache" 
+      - name: mconfig
+        type: str
+        tag: cscratch
+        _: "--nocache" 
+      - name: experiment
+        type: int
+        _: 0,1,2
+  - name: globalParameter
+    parameter:
+      - name: modules
+        tag: "jwb|jwc"
+        separator: |
+        _:
+          module load Stages/2022 &&
+          module load GCCcore/.11.2.0 &&
+          module load TensorFlow/2.6.0-CUDA-11.5 &&
+          module load GCC/11.2.0  &&
+          module load OpenMPI/4.1.1 &&
+          module load Horovod/0.24.3
+      - name: modules
+        tag: "e4nvidia|e4amd"
+        separator: |
+        _:
+          module load slurm
+      - name: systemname
+        tag: jwc
+        _: jwc
+      - name: systemname
+        tag: jwb
+        _: jwb
+      - name: systemname
+        tag: e4nvidia
+        _: e4nvidia
+      - name: systemname
+        tag: e4amd
+        _: e4amd
+      - name: cml_mirror
+        type: string
+        tag: jwb|jwc
+        _: "/p/scratch/deepacf/maelstrom/maelstrom_data/climetlab_mirror/"
+      - name: cml_mirror
+        type: string
+        tag: jwb+cscratch|jwc+cscratch
+        _: "/p/cscratch/deepacf/maelstrom/maelstrom_data/climetlab_mirror/"
+      - name: cml_mirror
+        type: string
+        tag: "e4nvidia|e4amd"
+        _: "/data/maelstrom/mchantry/climetlab_mirror/"
+  - name: executeset
+    init_with: platform.xml
+  - name: systemParameter
+    init_with: platform.xml
+    parameter:
+      - name: preprocess
+        mode: text
+        separator: |
+        _:
+          ${modules};
+      - name: threadspertask
+        _: 48
+        tag: jwb
+      - name: threadspertask
+        _: 40
+        tag: jwc
+      - name: threadspertask
+        _: 32
+        tag: e4nvidia|e4amd
+      - name: num_procs
+        type: int
+        _: 1
+      - name: nodes
+        _: 1
+      - name: n_gpu
+        _: 1
+      - name: taskspernode
+        _: $n_gpu
+      - name: timelimit
+        _: "01:00:00"
+      - name: timelimit
+        tag: e4amd|e4nvidia
+        _: "02:00:00"
+      - name: account
+        tag: jwb|jwc
+        _: deepacf
+      - name: account
+        tag: e4amd|e4nvidia
+        _: maelstrom
+      - name: queue
+        tag: jwb+!test
+        _: booster
+      - name: queue
+        tag: jwb+test
+        _: develbooster
+      - name: queue
+        tag: jwc+!test
+        _: gpus
+      - name: queue
+        tag: jwc+test
+        _: develgpus
+      - name: queue
+        tag: e4nvidia
+        _: i-gpu-a100
+      - name: queue
+        tag: e4amd
+        _: a-gpu-mi100
+      - name: gres
+        _: gpu:$n_gpu
+      - name: additional_job_config
+        tag: e4nvidia|e4amd
+        _: "#SBATCH --mem=128Gb"
+      - name: executable
+        _: radiation-benchmarks-sw
+      - name: args_exec
+        mode: text
+        _: > 
+          --tier ${tier}
+          --notf32
+          --batch 512
+          --epochs ${nepochs}
+          --runno $${SLURM_JOBID}
+          --model rnn
+          ${mconfig}
+
+patternset:
+   - name: perf_patterns
+     pattern:
+      - {name: epoch, type: int, _: "Epoch\\s+$jube_pat_int/\\s*$jube_pat_nint"}
+      - {name: epoch_time, type: int, _: "-\\s+${jube_pat_int}s\\s+-"}
+      - {name: loss, type: float, _: "loss:\\s+$jube_pat_fp"}
+      - {name: val_loss, type: float, _: "val_loss:\\s+$jube_pat_fp"}
+      - {name: jobid, type: int, _: "Submitted batch job $jube_pat_int" }
+      - {name: training_time, type: float, _: "Total training time: ${jube_pat_fp} s"}
+      - {name: total_time, type: float, _: "Total runtime: ${jube_pat_fp} s"}
+      - {name: cpu_mem, type: float, _: "Final CPU memory:.*peak: $jube_pat_fp GB"}
+      - {name: gpu_mem, type: float, _: "Final GPU memory:.*peak: $jube_pat_fp GB"}
+      - {name: batch_time_avg, type: float, _: "Average time per batch: $jube_pat_fp s"}
+      - {name: performance, type: float, _: "Average performance:\\s+$jube_pat_fp GB/s"}
+
+analyser:
+    name: analyse
+    reduce: false
+    use: perf_patterns
+    analyse:
+        step: submit
+        file:
+            - stdout
+            - job.out
+
+result:
+    use: analyse
+    table:
+      name: result
+      style: pretty
+      sort: iter_pat
+      column: 
+        - {title: "Config", _: mconfig}
+        - {title: "Experiment", _: experiment}
+        - {title: "JobID", _: jobid}
+        - {title: "# nodes", _: nodes}
+        - {title: "# gpu", _: n_gpu}
+        - {title: "num procs", _: num_procs}
+        - {title: "# cpu", _: threadspertask}
+        - {title: "Total runtime", _: total_time}
+        - {title: "Training time", _: training_time}
+        - {title: "avg. epoch time [s]", _: epoch_time_avg}
+        - {title: "performance [GB/s]", _: performance}
+        - {title: "first epoch time [s]", _: epoch_time_first}
+        - {title: "min epoch time [s]", _: epoch_time_min}
+        - {title: "max epoch time [s]", _: epoch_time_max}
+        - {title: "avg. batch time [s]", _: batch_time_avg}
+        - {title: "loss", _: loss_min}
+        - {title: "val loss", _: val_loss_min}
+        - {title: "max cpu mem", _: cpu_mem}
+        - {title: "max gpu mem", _: gpu_mem}
+
+step:
+  - name:   setup_venv
+    use:
+      - globalParameter
+      - systemParameter
+    do:
+      _:
+        ${modules};
+        cd ${jube_benchmark_home}/../env_setup/ &&
+        source ./create_env.sh venv_ap3_$systemname
+  - name:   submit
+    use:
+      - appParameter
+      - globalParameter
+      - systemParameter
+      - executeset
+      - from: platform.xml
+        _: jobfiles
+      - from: platform.xml
+        _: executesub
+    do:
+      done_file: $ready_file
+      error_file: $error_file
+      _:
+        ${modules};
+        export CLIMETLAB_MIRROR=${cml_mirror} ;
+        source $jube_benchmark_home/../virtual_envs/venv_ap3_$systemname/bin/activate;
+        $submit $submit_script
