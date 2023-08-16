@@ -11,14 +11,14 @@ class MetricsCallback(Callback):
             lr="Learnig rate",
             sw_loss="SW loss",
             sw_mae="SW mean absolute error",
-            sw_mse="SQ mean squared error",
+            sw_mse="SW mean squared error",
             val_hr_sw_loss="Validation HR SW loss",
             val_hr_sw_mae="Validation HR SW mean absolute error",
             val_hr_sw_mse="Validation HR SW mean squared error",
             val_loss="Validation loss",
             val_sw_loss="Validation SW loss",
             val_sw_mae="Validation SW mean absolute error",
-            val_sw_mse="Validation SQ mean squared error"
+            val_sw_mse="Validation SW mean squared error"
         )
         self.metrics=dict()
     def on_epoch_end(self, epoch, logs=None):
