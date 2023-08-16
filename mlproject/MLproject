@@ -1,0 +1,20 @@
+name: ap3
+
+entry_points:
+  main:
+    parameters:
+      tier:
+        type: int
+        default: 1
+      nepochs:
+        type: int
+        default: 5
+      mconfig:
+        type: string
+        default: --nocache
+    command: >
+      python3 -u benchmarks_sw.py \
+          --tier {tier} \
+          --batch 512 \
+          --epochs {nepochs} \
+          --model rnn \
