@@ -18,4 +18,5 @@ entry_points:
           --batch 512
           --epochs {nepochs}
           --model rnn
+          {mconfig}
  
