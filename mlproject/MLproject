@@ -13,8 +13,9 @@ entry_points:
         type: string
         default: --nocache
     command: >
-      python3 -u benchmarks_sw.py \
-          --tier {tier} \
-          --batch 512 \
-          --epochs {nepochs} \
-          --model rnn \
+      python3 -u benchmarks_sw.py
+          --tier {tier}
+          --batch 512
+          --epochs {nepochs}
+          --model rnn
+ 
