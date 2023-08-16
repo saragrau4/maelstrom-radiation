@@ -14,28 +14,30 @@ python -m venv <venv-name>
 source <venv-name>/bin/activate
 ```
 
-3. Clone this Git repository and checkout the `develop` branch
+3. Clone this Git repository and checkout the `main` branch
 
 ```
-git clone https://github.com/saragrau4/downscaling_maelstrom.git
-git checkout develop
+git clone https://github.com/saragrau4/maelstrom-radiation.git
+git checkout main
 ```
 
-3. Install ap5 dependencies with pip. The requirements file is in the `env_setup` file
+3. Install ap3 dependencies with pip. 
 ```
-pip install -r downscaling_ap5/env_setup/requirements_wo_modules.txt
+pip install -r requirements_wo_modules.txt
 ```
 
 4. Add the following code at the end of the virtual enviroment activate file `<venv-name>/bin/activate`:
 ```
-BASE_DIR="<absolute path to downscaling_maelstrom/downscaling_ap5 directory>"
+BASE_DIR="<absolute path to maelstrom-radiation/climetlab_maelstrom_radiation/benchmarks directory>"
 # expand PYTHONPATH
+export PYTHONPATH=${BASE_DIR}:$PYTHONPATH
 export PYTHONPATH=${BASE_DIR}:$PYTHONPATH
 export PYTHONPATH=${BASE_DIR}/utils:$PYTHONPATH
 export PYTHONPATH=${BASE_DIR}/handle_data:$PYTHONPATH
 export PYTHONPATH=${BASE_DIR}/models:$PYTHONPATH
 export PYTHONPATH=${BASE_DIR}/postprocess:$PYTHONPATH
 export PYTHONPATH=${BASE_DIR}/preprocess:$PYTHONPATH
+
 ```
 <br>
 In your local mlproject
@@ -49,5 +51,5 @@ Environment:
 
 2. Run your experiment with mantik
 ```
-mantik runs submit <absolute path to downscaling_ap5/mlproject directory> --backend-config unicore-config-venv.yaml --entry-point main --experiment-id 59 -v
+mantik runs submit <absolute path to maelstrom-radiation/mlproject directory> --backend-config unicore-config-venv.yaml --entry-point main --experiment-id 72 -v
 ```
