@@ -22,8 +22,10 @@ class MetricsCallback(Callback):
         )
         self.metrics=dict()
     def on_epoch_end(self, epoch, logs=None):
+        logs = logs or {}
         for key, value in logs.items():
             display_name = self.key_to_display_name.get(key)
             if display_name is not None:
                 self.metrics[display_name] = value
-        mlflow.log_metrics(self.metrics, step=epoch)
+        if self.metrics:
+            mlflow.log_metrics(self.metrics, step=epoch)
