@@ -1,3 +1,6 @@
+## Autorship disclaimer
+This repository is a copy of https://git.ecmwf.int/scm/mlfet/maelstrom-radiation.git. This version is required to use it on the Mantik platform. We do not claim autorship of the code.
+
 ## maelstrom-radiation
 
 A dataset plugin for climetlab (https://climetlab.readthedocs.io/en/latest/)

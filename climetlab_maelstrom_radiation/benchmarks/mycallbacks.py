@@ -8,6 +8,8 @@
 # nor does it submit to any jurisdiction.
 #
 # Callback to get the time per epoch and write to log
+
+
 class EpochTimingCallback(Callback):
     # def __init__(self):
     #     self.batch_times = []
