@@ -33,7 +33,7 @@ def load_data(
     shuffle=True,
     output_fields = ["sw", "hr_sw"],
 ):
-
+    cml.settings.set("url‑download‑timeout", "240s")
     kwargs = {
         "hr_units": "K d-1",
         "norm": False,
