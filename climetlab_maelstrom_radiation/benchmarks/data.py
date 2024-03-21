@@ -36,7 +36,6 @@ def load_data(
     cml.settings.set("url-download-timeout", "240s")
     kwargs = {
         "hr_units": "K d-1",
-        "norm": False,
         "dataset": "tripleclouds",
         "output_fields": output_fields,
     }
