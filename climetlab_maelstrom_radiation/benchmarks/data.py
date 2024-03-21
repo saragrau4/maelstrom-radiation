@@ -59,7 +59,7 @@ def load_data(
         tiername = tiername + f"-{mode}"
 
     ds_cml = cml.load_dataset(
-        "maelstrom-radiation-tf", subset = tiername, **kwargs
+        "maelstrom-radiation", subset = tiername, **kwargs
     )
 
     train_num = ds_cml.numcolumns // shard_num
