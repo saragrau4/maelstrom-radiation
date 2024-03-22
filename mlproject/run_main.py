@@ -23,3 +23,13 @@ model.compile(optimizer='adam',
 
 with mlflow.start_run():
     model.fit(X_train, y_train, epochs=5, validation_data=(X_val, y_val), callbacks=[MetricsCallback(), EpochTimingCallback()])
+
+def main():
+    parser = argparse.ArgumentParser(description="Train a simple Keras model and log metrics with MLflow.")
+    parser.add_argument("--epochs", type=int, default=5, help="Number of epochs for training (default: 5)")
+    args = parser.parse_args()
+
+    train_model(args.epochs)
+
+if __name__ == "__main__":
+    main()
