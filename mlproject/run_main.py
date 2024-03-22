@@ -1,7 +1,6 @@
 import argparse
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense
-import mlflow
 import numpy as np
 from climetlab_maelstrom_radiation.benchmarks.utils import EpochTimingCallback
 from climetlab_maelstrom_radiation.benchmarks.metrics_callback import MetricsCallback
@@ -23,8 +22,7 @@ def train_model(epochs):
                   metrics=['mae', 'mse'])
     
     
-    with mlflow.start_run():
-        model.fit(X_train, y_train, epochs=5, validation_data=(X_val, y_val), callbacks=[MetricsCallback(), EpochTimingCallback()])
+    model.fit(X_train, y_train, epochs=5, validation_data=(X_val, y_val), callbacks=[MetricsCallback(), EpochTimingCallback()])
 
 def main():
     parser = argparse.ArgumentParser(description="Train a simple Keras model and log metrics with MLflow.")
