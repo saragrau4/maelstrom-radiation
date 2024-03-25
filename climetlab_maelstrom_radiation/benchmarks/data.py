@@ -33,9 +33,10 @@ def load_data(
     shuffle=True,
     output_fields = ["sw", "hr_sw"],
 ):
-    cml.settings.set("url-download-timeout", "240s")
+
     kwargs = {
         "hr_units": "K d-1",
+        "norm": False,
         "dataset": "tripleclouds",
         "output_fields": output_fields,
     }
@@ -58,7 +59,7 @@ def load_data(
         tiername = tiername + f"-{mode}"
 
     ds_cml = cml.load_dataset(
-        "maelstrom-radiation", subset = tiername, **kwargs
+        "maelstrom-radiation-tf", subset = tiername, **kwargs
     )
 
     train_num = ds_cml.numcolumns // shard_num
