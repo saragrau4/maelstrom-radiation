@@ -2,8 +2,8 @@ import argparse
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense
 import numpy as np
-from climetlab_maelstrom_radiation.benchmarks.utils import EpochTimingCallback
-from climetlab_maelstrom_radiation.benchmarks.metrics_callback import MetricsCallback
+from ..climetlab_maelstrom_radiation.benchmarks.utils import EpochTimingCallback
+from ..climetlab_maelstrom_radiation.benchmarks.metrics_callback import MetricsCallback
 
 def train_model(epochs):
     X_train = np.random.rand(100, 10)
