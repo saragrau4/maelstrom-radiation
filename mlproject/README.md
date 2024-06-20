@@ -3,13 +3,20 @@ To run this application in juwels-booster with the mantik CLI follow these instr
 
 1. Login to juwels-booster via SSH. To access juwels-booster via SSH, please follow the instructions provided in this [tutorial](https://apps.fz-juelich.de/jsc/hps/juwels/access.html#ssh-login)
 
-2. Once you are logged in on juwels-booster, set python to version 3.9. For this load the following modules:
+2. Once you are logged in on one of JSC or CSCS compute resources, set python to version 3.9. For this load the following modules:
+
 ```
+# JSC
 ml --force purge
 ml use $OTHERSTAGES
 ml Stages/2022
 ml GCCcore/.11.2.0
 ml Python/3.9.6
+```
+
+```
+# CSCS
+module load cray-python/3.9.4.1 cudatoolkit/21.5_11.3
 ```
 
 3. Create a virtual enviroment and activate it:
@@ -46,11 +53,20 @@ export PYTHONPATH=${BASE_DIR}/preprocess:$PYTHONPATH
 
 7. The results will be logged to an Experiment on the MLflow tracking server on Mantik. Set up a project in Mantik and create a new Experiment. Note its experiment Id, which will be needed in the submission command. For a step-by-step guide, refer to the Quickstart tutorial available [here](https://mantik-ai.gitlab.io/mantik/ui/quickstart.html).
 
-8. Update the `unicore-config-venv.yaml` file by specifying the `PreRunCommand` with the path to your virtual environment.
+8. Update the `unicore-config-venv.yaml` or `firecrest-config-venv.yaml` file according to the HPC site where you intend to submit your run. Specify the `PreRunCommandOnCompute` parameter with the path to your virtual environment.
 
-<pre><code>   PreRunCommand:
+<pre><code># JSC
+PreRunCommandOnComputeNode:
     Command: > 
       module load Stages/2022 GCCcore/.11.2.0 GCC/11.2.0 cuDNN/8.3.1.22-CUDA-11.5 Python/3.9.6
+      source <b>/path/to/&lt;venv-name&gt;</b>/bin/activate;
+</code></pre>
+
+
+<pre><code># CSCS
+PreRunCommandOnComputeNode:
+    Command: > 
+      module load cray-python/3.9.4.1 cudatoolkit/21.5_11.3
       source <b>/path/to/&lt;venv-name&gt;</b>/bin/activate;
 </code></pre>
 

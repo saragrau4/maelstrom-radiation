@@ -1,0 +1,19 @@
+Firecrest:
+  ApiUrl: https://firecrest.cscs.ch
+  TokenUrl: https://auth.cscs.ch/auth/realms/firecrest-clients/protocol/openid-connect/token
+  Machine: daint
+Resources:
+    Queue: normal
+    Nodes: 2
+    NodeConstraints: gpu
+Environment:
+  Variables:
+    GIT_PYTHON_REFRESH: quiet
+  PreRunCommandOnComputeNode: >-
+    module load cray-python/3.9.4.1 cudatoolkit/21.5_11.3;
+    source /users/femmeric/ap3/bin/activate
+Exclude:
+  - '*.sif'
+  - figures
+  - saved_model
+  - README.md

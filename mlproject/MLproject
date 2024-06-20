@@ -1,7 +1,7 @@
 name: ap3
 
 entry_points:
-  main:
+  benchmarks:
     parameters:
       tier:
         type: int
@@ -19,4 +19,12 @@ entry_points:
           --epochs {nepochs}
           --model rnn
           {mconfig}
+  run_main:
+    parameters:
+      epochs:
+        type: int
+        default: 5
+    command: >
+      python run_main.py
+          --epochs {epochs}
  
